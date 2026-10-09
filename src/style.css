@@ -741,3 +741,58 @@ footer {
   padding: 70px 10px;
   text-align: center;
 }
+.quota-panel {
+  padding: 22px;
+  margin-top: 20px;
+}
+.quota-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 20px 0;
+}
+.quota-cards > div {
+  padding: 16px;
+  background: #14171c;
+  border: 1px solid #383838;
+  border-radius: 6px;
+}
+.quota-cards strong {
+  display: block;
+  font-size: 24px;
+  color: #dfad50;
+  margin: 10px 0;
+}
+.quota-cards strong span {
+  font-size: 15px;
+  color: #8d8d94;
+}
+.quota-cards p {
+  font-size: 11px;
+  color: #9c9ba0;
+}
+.quota-fields {
+  grid-template-columns: repeat(3, 1fr);
+}
+.quota-panel a,
+.quota-panel summary {
+  font-size: 12px;
+  color: #dfad50;
+  cursor: pointer;
+}
+.quota-panel a {
+  display: inline-block;
+  margin-top: 12px;
+}
+.quota-alert {
+  padding: 12px;
+  background: #6e4a2030;
+  color: #dfad50;
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .quota-cards,
+  .quota-fields {
+    grid-template-columns: 1fr;
+  }
+}

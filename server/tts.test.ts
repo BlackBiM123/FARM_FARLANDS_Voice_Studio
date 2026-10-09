@@ -69,18 +69,16 @@ describe("Protected Gemini proxy", () => {
     const wav = Buffer.alloc(48);
     wav.write("RIFF");
     wav.write("WAVE", 8);
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({
-          steps: [
-            {
-              type: "model_output",
-              content: [{ type: "audio", data: wav.toString("base64") }],
-            },
-          ],
-        }),
-      );
+    const fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        steps: [
+          {
+            type: "model_output",
+            content: [{ type: "audio", data: wav.toString("base64") }],
+          },
+        ],
+      }),
+    );
     vi.stubGlobal("fetch", fetch);
     const r = await handleTTS(req());
     expect(r.status).toBe(200);

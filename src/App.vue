@@ -17,6 +17,37 @@ import JSZip from "jszip";
 import { initialNPCs } from "./data";
 import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
+import QuotaPanel from "./components/QuotaPanel.vue";
+const quotaPanel = ref<InstanceType<typeof QuotaPanel> | null>(null);
+const authenticated = ref(false),
+  loginBusy = ref(false);
+async function login() {
+  loginBusy.value = true;
+  try {
+    const r = await fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: token.value }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw Error(data.error);
+    authenticated.value = true;
+    token.value = "";
+    accessOpen.value = false;
+    notice.value = "Вход сохранён на 30 дней в этом браузере";
+  } catch (e) {
+    notice.value = e instanceof Error ? e.message : "Ошибка входа";
+  } finally {
+    loginBusy.value = false;
+  }
+}
+async function logout() {
+  await fetch("/api/session", { method: "DELETE" });
+  authenticated.value = false;
+  accessOpen.value = false;
+  token.value = "";
+  notice.value = "Вы вышли из студии";
+}
 const npcs = ref(loadProject(initialNPCs)),
   selected = ref(npcs.value[0]?.id ?? ""),
   query = ref(""),
@@ -56,6 +87,10 @@ watch(
   { deep: true },
 );
 onMounted(async () => {
+  try {
+    const r = await fetch("/api/session");
+    authenticated.value = (await r.json()).authenticated === true;
+  } catch {}
   try {
     takes.value = await takesDB("read");
     takes.value.forEach(
@@ -116,7 +151,11 @@ function addNPC() {
   tab.value = "studio";
 }
 async function generate() {
-  if (!token.value) {
+  if ((quotaPanel.value?.cooldown ?? 0) > 0) {
+    notice.value = "Дождитесь окончания времени ожидания в панели лимитов";
+    return;
+  }
+  if (!authenticated.value) {
     accessOpen.value = true;
     return;
   }
@@ -133,7 +172,6 @@ async function generate() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token.value}`,
       },
       body: JSON.stringify({
         ...snapshot.settings,
@@ -143,8 +181,19 @@ async function generate() {
     });
     if (!r.ok) {
       const data = await r.json();
+      if (r.status === 401) {
+        authenticated.value = false;
+        accessOpen.value = true;
+      }
+      if (r.status === 429)
+        quotaPanel.value?.failure(
+          snapshot.settings.model,
+          data.error,
+          data.quota,
+        );
       throw Error(data.error ?? "Ошибка генерации");
     }
+    quotaPanel.value?.success(snapshot.settings.model);
     const take: Take = {
       ...snapshot,
       id: crypto.randomUUID(),
@@ -417,7 +466,9 @@ function pauseOthers(e: Event) {
             <span>{{ npc.text.length }} / 600 символов</span
             ><button
               class="primary"
-              :disabled="busy || !npc.text.trim()"
+              :disabled="
+                busy || !npc.text.trim() || (quotaPanel?.cooldown ?? 0) > 0
+              "
               @click="generate"
             >
               <AudioLines :size="17" />{{
@@ -511,6 +562,7 @@ function pauseOthers(e: Event) {
         </p>
       </aside>
     </div>
+    <QuotaPanel ref="quotaPanel" :model="npc?.settings.model ?? models[0]" />
     <footer><span>FARM & FARLANDS</span><span>VOICE STUDIO</span></footer>
     <div v-if="notice" class="toast" role="status">
       {{ notice
@@ -537,21 +589,33 @@ function pauseOthers(e: Event) {
           <X />
         </button>
         <h2 id="access-title">Доступ к студии</h2>
-        <p>
-          Введите код доступа владельца сервера. Ключ Gemini хранится только на
-          сервере.
-        </p>
-        <label
-          >Код доступа<input
-            v-model="token"
-            type="password"
-            autocomplete="off"
-            @keyup.enter="accessOpen = false"
-        /></label>
-        <p class="hint">
-          Код остаётся в памяти вкладки и не сохраняется в проекте.
-        </p>
-        <button class="primary" @click="accessOpen = false">Продолжить</button>
+        <template v-if="authenticated"
+          ><p>
+            Вход уже сохранён в этом браузере на 30 дней. Повторно вводить код
+            после обновления страницы не требуется.
+          </p>
+          <button @click="logout">Выйти из студии</button></template
+        >
+        <template v-else>
+          <p>
+            Введите код доступа владельца сервера. Ключ Gemini хранится только
+            на сервере.
+          </p>
+          <label
+            >Код доступа<input
+              v-model="token"
+              type="password"
+              autocomplete="off"
+              @keyup.enter="login"
+          /></label>
+          <p class="hint">
+            Вход сохраняется на 30 дней в защищённом cookie. Код не попадает в
+            экспорт проекта.
+          </p>
+          <button class="primary" :disabled="loginBusy" @click="login">
+            {{ loginBusy ? "Вход…" : "Продолжить" }}
+          </button>
+        </template>
       </section>
     </div>
     <div v-if="compared.length" class="compare">

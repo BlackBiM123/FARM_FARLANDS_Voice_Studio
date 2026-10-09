@@ -13,7 +13,7 @@ Copy `.env.example` to `.env.local` and configure **server-only** values:
 - `GENERATION_ENABLED`: defaults to false. Set true only after confirming account quotas and approving any possible charges.
 - `STUDIO_ORIGIN`: exact allowed origin; same-origin requests are also permitted.
 
-Never use `VITE_` prefixes for secrets. They would put secrets in the public client bundle. The studio access code is kept only in tab memory. Unauthorized requests are rejected before any provider call. The API validates input, restricts models/voices, limits test text to 600 characters, sets a 90-second provider timeout and caps WAV responses at 4 MB. Errors omit provider bodies and secrets. Logs contain only a request ID and status. This is a private owner studio with a shared access code, not a multi-user authentication system. There is no distributed application rate limiter: keep the access code private and configure Vercel Firewall rate limits and provider quotas before allowing wider access.
+Never use `VITE_` prefixes for secrets. They would put secrets in the public client bundle. The access code establishes a signed HttpOnly, Secure, SameSite=Strict session cookie valid for 30 days. It is not stored in the client project or localStorage. The access dialog supports signing out. Unauthorized requests are rejected before any provider call. The API validates input, restricts models/voices, limits test text to 600 characters, sets a 90-second provider timeout and caps WAV responses at 4 MB. Errors omit provider bodies and secrets. Logs contain only a request ID and status. This is a private owner studio with a shared access code, not a multi-user authentication system. There is no distributed application rate limiter: keep the access code private and configure Vercel Firewall rate limits and provider quotas before allowing wider access.
 
 ## Vercel / GitHub
 
@@ -53,4 +53,10 @@ Live application: https://farm-farlands-voice-studio.vercel.app/
 
 The initial production deployment is READY on Vercel with `GENERATION_ENABLED=false`. Its UI returns HTTP 200, and unauthenticated POST /api/tts returns HTTP 401. The browser starts with an empty catalog and reports no console warnings/errors. No Gemini synthesis call was made.
 
-Source has been pushed to main. The first deployment was uploaded from reviewed local files. The owner has now reauthorized Vercel and connected BlackBiM123/FARM_FARLANDS_Voice_Studio in the project Git settings. Pushes to main use Vercel's Git integration; generation remains disabled.
+Source has been pushed to main. The first deployment was uploaded from reviewed local files. The owner has now reauthorized Vercel and connected BlackBiM123/FARM_FARLANDS_Voice_Studio in the project Git settings. Pushes to main use Vercel's Git integration; generation is enabled for the owner-confirmed Free tier.
+
+## Usage panel
+
+The in-studio panel records successful takes in this browser, per model. It displays a daily-reset countdown based on America/Los_Angeles midnight with DST, and a local estimate of request allowance if RPM/RPD limits are known. Limits can be entered inside the studio and are also populated from Google QuotaFailure responses when supplied. RetryInfo supplies a cooldown timer; 429 without retry metadata displays an unknown wait, not an invented duration. The UI prevents generation while a reported cooldown is active.
+
+This is not an authoritative project-wide remaining quota. Other applications, devices, tabs, rejected requests and historical calls are not measured. TPM allowance can be configured, but remaining tokens are unknown. Project-wide monitoring requires additional authenticated Service Usage / Cloud Monitoring access, plus verifying that the model's quota metrics are exposed there. No Google Cloud monitoring credentials have been configured and no external AI Studio link is required by the UI.

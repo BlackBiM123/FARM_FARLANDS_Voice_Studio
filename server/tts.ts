@@ -1,26 +1,15 @@
-import { timingSafeEqual, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import { authorized, sameOrigin } from "./auth.js";
+import { quotaDetails } from "./quota.js";
 import { generationSchema } from "../shared/schema.js";
 const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 export async function handleTTS(request: Request): Promise<Response> {
   if (request.method !== "POST")
     return json({ error: "Метод не поддерживается" }, 405);
-  const secret = process.env.STUDIO_ACCESS_TOKEN,
-    supplied =
-      request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
-  if (
-    !secret ||
-    secret.length < 24 ||
-    Buffer.byteLength(secret) !== Buffer.byteLength(supplied) ||
-    !timingSafeEqual(Buffer.from(secret), Buffer.from(supplied))
-  )
+  if (!authorized(request))
     return json({ error: "Введите действительный код доступа к студии" }, 401);
-  const origin = request.headers.get("origin");
-  if (
-    origin &&
-    origin !== new URL(request.url).origin &&
-    origin !== process.env.STUDIO_ORIGIN
-  )
+  if (!sameOrigin(request))
     return json({ error: "Недопустимый источник запроса" }, 403);
   if (process.env.GENERATION_ENABLED !== "true")
     return json(
@@ -87,6 +76,11 @@ export async function handleTTS(request: Request): Promise<Response> {
     );
     if (!response.ok) {
       console.error("tts upstream", { requestId, status: response.status });
+      let quota: ReturnType<typeof quotaDetails> | undefined;
+      if (response.status === 429) {
+        const body = await response.json().catch(() => ({}));
+        quota = quotaDetails(body, response.headers.get("retry-after"));
+      }
       return json(
         {
           error:
@@ -96,6 +90,7 @@ export async function handleTTS(request: Request): Promise<Response> {
                 ? "Модель недоступна для вашего проекта."
                 : "Gemini отклонил запрос. Проверьте доступ и биллинг в AI Studio.",
           requestId,
+          quota,
         },
         response.status === 429 ? 429 : 502,
       );

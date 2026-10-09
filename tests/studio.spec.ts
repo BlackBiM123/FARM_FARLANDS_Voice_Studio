@@ -1,5 +1,71 @@
 import { test, expect } from "@playwright/test";
 import JSZip from "jszip";
+test("quota response shows local countdown and persists limits without external navigation", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Добавить персонажа", exact: true })
+    .click();
+  await page.getByLabel("Текст реплики").fill("Тест");
+  await page.getByRole("button", { name: "Создать дубль" }).click();
+  await page.getByLabel("Код доступа", { exact: true }).fill("test-only-token");
+  await page.getByRole("button", { name: "Продолжить" }).click();
+  await page.route("**/api/tts", (r) =>
+    r.fulfill({
+      status: 429,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Квота исчерпана",
+        quota: {
+          retryAfterSeconds: 30,
+          limits: [{ period: "day", kind: "requests", limit: 10 }],
+        },
+      }),
+    }),
+  );
+  await page.getByRole("button", { name: "Создать дубль" }).click();
+  await expect(page.locator(".quota-alert")).toContainText(
+    "Google рекомендует повторить через",
+  );
+  await expect(
+    page.getByRole("button", { name: "Создать дубль" }),
+  ).toBeDisabled();
+  await page.getByText("Настроить лимиты проекта", { exact: true }).click();
+  await expect(page.getByLabel("Запросов в день (RPD)")).toHaveValue("10");
+  await page.reload();
+  await expect(page.locator(".quota-alert")).toBeVisible();
+  await expect(page.locator(".quota-panel a")).toHaveCount(0);
+  await page.screenshot({
+    path: "../../outputs/voice-studio-limits.png",
+    fullPage: true,
+  });
+});
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/session", async (route) => {
+    const method = route.request().method();
+    if (method === "POST")
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: {
+          "Set-Cookie":
+            "farlands_session=test-cookie; HttpOnly; Path=/api; Max-Age=2592000; SameSite=Strict",
+        },
+        body: JSON.stringify({ authenticated: true }),
+      });
+    else
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: (route.request().headers()["cookie"] ?? "").includes(
+            "farlands_session=test-cookie",
+          ),
+        }),
+      });
+  });
+});
 test("casting, persistence, generation, comparison and Godot export", async ({
   page,
 }) => {
@@ -79,6 +145,11 @@ test("casting, persistence, generation, comparison and Godot export", async ({
   await page.reload();
   await page.locator(".npc-row").filter({ hasText: "Тестовый NPC" }).click();
   await expect(page.locator(".take")).toHaveCount(2);
+  await page.getByRole("button", { name: "Доступ к API" }).click();
+  await expect(
+    page.getByText("Вход уже сохранён", { exact: false }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Закрыть", exact: true }).click();
   await page.getByRole("button", { name: "Удалить дубль" }).first().click();
   await expect(page.locator(".take")).toHaveCount(1);
   await page.screenshot({ path: "../../work/studio.png", fullPage: true });
