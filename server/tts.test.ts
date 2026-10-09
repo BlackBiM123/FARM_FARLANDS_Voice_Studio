@@ -31,6 +31,33 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("Protected Gemini proxy", () => {
+  it("adds the game direction by default and removes it when disabled without changing the transcript", async () => {
+    const captured: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (_url, options) => {
+        captured.push(JSON.parse(options.body));
+        return Response.json({ steps: [] });
+      }),
+    );
+    await handleTTS(req());
+    await handleTTS(req({ ...payload, gameCharacter: false }));
+    const items = captured as {
+      input: {
+        content: { text: string; annotations: { style: string }[] }[];
+      }[];
+    }[];
+    expect(items[0]!.input[0]!.content[0]!.annotations[0]!.style).toContain(
+      "Farm & Farlands",
+    );
+    expect(items[0]!.input[0]!.content[0]!.annotations[0]!.style).toContain(
+      "Emotion: Calm",
+    );
+    expect(items[1]!.input[0]!.content[0]!.annotations[0]!.style).not.toContain(
+      "Farm & Farlands",
+    );
+    expect(items[0]!.input[0]!.content[0]!.text).toBe("Hello");
+  });
   it("rejects unauthenticated requests before calling provider", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

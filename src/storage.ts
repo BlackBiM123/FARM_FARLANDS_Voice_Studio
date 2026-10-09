@@ -1,5 +1,6 @@
 import { projectSchema, type NPC, type Settings } from "../shared/schema";
 export type Take = {
+  gameCharacter?: boolean;
   id: string;
   npcId: string;
   text: string;
@@ -59,9 +60,17 @@ export function loadProject(fallback: NPC[]) {
   } catch {}
   return structuredClone(fallback);
 }
-export function saveProject(npcs: NPC[]) {
+export function loadGameCharacter() {
+  try {
+    const raw = localStorage.getItem("farlands-empty-studio-project");
+    return raw ? projectSchema.parse(JSON.parse(raw)).gameCharacter : true;
+  } catch {
+    return true;
+  }
+}
+export function saveProject(npcs: NPC[], gameCharacter = true) {
   localStorage.setItem(
     "farlands-empty-studio-project",
-    JSON.stringify({ version: 1, npcs }),
+    JSON.stringify({ version: 1, npcs, gameCharacter }),
   );
 }

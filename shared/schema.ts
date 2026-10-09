@@ -29,6 +29,7 @@ export const settingsSchema = z.object({
 export const generationSchema = settingsSchema.extend({
   text: z.string().trim().min(1).max(600),
   language: z.enum(["ru", "en"]),
+  gameCharacter: z.boolean().default(true),
 });
 export const npcSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]{1,60}$/),
@@ -40,6 +41,7 @@ export const npcSchema = z.object({
 export const projectSchema = z.object({
   version: z.literal(1),
   npcs: z.array(npcSchema).max(100),
+  gameCharacter: z.boolean().default(true),
 });
 export type NPC = z.infer<typeof npcSchema>;
 export type Settings = z.infer<typeof settingsSchema>;

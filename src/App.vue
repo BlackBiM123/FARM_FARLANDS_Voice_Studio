@@ -15,6 +15,9 @@ import {
 } from "lucide-vue-next";
 import JSZip from "jszip";
 import { initialNPCs } from "./data";
+import { loadGameCharacter } from "./storage";
+import { gameStyleRule } from "../shared/game-style";
+const gameCharacter = ref(loadGameCharacter());
 import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
 import QuotaPanel from "./components/QuotaPanel.vue";
@@ -99,10 +102,10 @@ const compared = computed(() =>
   takes.value.filter((t) => compare.value.includes(t.id)),
 );
 watch(
-  npcs,
+  [npcs, gameCharacter],
   () => {
     try {
-      saveProject(npcs.value);
+      saveProject(npcs.value, gameCharacter.value);
     } catch {
       notice.value = "Не удалось сохранить настройки. Экспортируйте JSON.";
     }
@@ -133,9 +136,18 @@ function download(blob: Blob, name: string) {
 }
 function exportProject() {
   download(
-    new Blob([JSON.stringify({ version: 1, npcs: npcs.value }, null, 2)], {
-      type: "application/json",
-    }),
+    new Blob(
+      [
+        JSON.stringify(
+          { version: 1, npcs: npcs.value, gameCharacter: gameCharacter.value },
+          null,
+          2,
+        ),
+      ],
+      {
+        type: "application/json",
+      },
+    ),
     "farlands-project.json",
   );
 }
@@ -147,6 +159,7 @@ async function importProject(e: Event) {
     if (file.size > 1000000) throw Error();
     const data = projectSchema.parse(JSON.parse(await file.text()));
     npcs.value = data.npcs;
+    gameCharacter.value = data.gameCharacter;
     selected.value = data.npcs[0]?.id ?? "";
     notice.value = "Проект импортирован";
   } catch {
@@ -189,6 +202,7 @@ async function generate() {
     text: npc.value.text,
     settings: structuredClone({ ...npc.value.settings }),
     language: language.value,
+    gameCharacter: gameCharacter.value,
   };
   try {
     const r = await fetch("/api/tts", {
@@ -200,6 +214,7 @@ async function generate() {
         ...snapshot.settings,
         text: snapshot.text,
         language: snapshot.language,
+        gameCharacter: snapshot.gameCharacter,
       }),
     });
     if (!r.ok) {
@@ -266,6 +281,7 @@ async function exportGodot() {
       version: 1,
       project: "FARM & FARLANDS",
       audio_format: "wav",
+      game_character: gameCharacter.value,
       npcs: npcs.value,
       takes: takes.value.map((t) => ({
         id: t.id,
@@ -273,6 +289,7 @@ async function exportGodot() {
         text: t.text,
         settings: t.settings,
         language: t.language,
+        game_character: t.gameCharacter ?? null,
         favorite: t.favorite,
         created_at: t.createdAt,
         audio: `res://voice/audio/${t.npcId}_${t.id}.wav`,
@@ -322,6 +339,23 @@ function pauseOthers(e: Event) {
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small>{{ npcs.length }} ПЕРСОНАЖЕЙ · ЛОКАЛЬНЫЙ ПРОЕКТ</small>
     </nav>
+    <section class="game-style panel">
+      <label class="game-style-toggle"
+        ><input v-model="gameCharacter" type="checkbox" /><span
+          ><strong>Персонаж Farm & Farlands</strong
+          ><small
+            >Общее правило для всех генераций: живые герои уютного мира фермы,
+            торговли, тайн и приключений.</small
+          ></span
+        ></label
+      >
+      <details>
+        <summary>
+          Правило подачи {{ gameCharacter ? "включено" : "выключено" }}
+        </summary>
+        <p>{{ gameStyleRule }}</p>
+      </details>
+    </section>
     <section v-if="tab === 'casting'" class="casting">
       <div class="section-heading">
         <span class="eyebrow">КАСТИНГ ОЗВУЧКИ</span

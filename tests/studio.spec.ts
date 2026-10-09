@@ -75,6 +75,25 @@ test("casting, persistence, generation, comparison and Godot export", async ({
   await expect(
     page.getByRole("heading", { name: "Начните с персонажа", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("checkbox", {
+      name: "Персонаж Farm & Farlands",
+      exact: false,
+    }),
+  ).toBeChecked();
+  await page
+    .getByRole("checkbox", { name: "Персонаж Farm & Farlands", exact: false })
+    .uncheck();
+  await page.reload();
+  await expect(
+    page.getByRole("checkbox", {
+      name: "Персонаж Farm & Farlands",
+      exact: false,
+    }),
+  ).not.toBeChecked();
+  await page
+    .getByRole("checkbox", { name: "Персонаж Farm & Farlands", exact: false })
+    .check();
   await page.screenshot({
     path: "../voice-studio-preview.png",
     fullPage: true,

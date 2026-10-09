@@ -858,3 +858,45 @@ footer {
     flex-direction: column;
   }
 }
+.game-style {
+  padding: 15px 20px;
+  margin-bottom: 20px;
+}
+.game-style-toggle {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+.game-style-toggle input {
+  accent-color: #dfad50;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+}
+.game-style-toggle strong {
+  display: block;
+  font-size: 13px;
+  color: #e5c88e;
+}
+.game-style-toggle small {
+  display: block;
+  font-size: 11px;
+  margin-top: 6px;
+  line-height: 1.6;
+}
+.game-style details {
+  margin: 10px 0 0 29px;
+}
+.game-style summary {
+  font-size: 10px;
+  color: #bd9e6b;
+  cursor: pointer;
+}
+.game-style details p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #aaa197;
+  max-width: 950px;
+}

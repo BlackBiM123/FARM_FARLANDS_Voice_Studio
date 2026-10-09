@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { authorized, sameOrigin } from "./auth.js";
 import { quotaDetails } from "./quota.js";
 import { generationSchema } from "../shared/schema.js";
+import { gameStyleRule } from "../shared/game-style.js";
 const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 export async function handleTTS(request: Request): Promise<Response> {
@@ -58,7 +59,7 @@ export async function handleTTS(request: Request): Promise<Response> {
                   annotations: [
                     {
                       type: "speech_metadata",
-                      style: `Language: ${s.language === "ru" ? "Russian" : "English"}. Emotion: ${s.emotion}. Speaking pace: ${s.pace}x relative to normal. ${s.direction}`,
+                      style: `${s.gameCharacter ? gameStyleRule + "\n" : ""}Language: ${s.language === "ru" ? "Russian" : "English"}. Emotion: ${s.emotion}. Speaking pace: ${s.pace}x relative to normal. ${s.direction}`,
                     },
                   ],
                 },
