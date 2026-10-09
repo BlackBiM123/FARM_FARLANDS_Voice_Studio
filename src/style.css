@@ -796,3 +796,65 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+.voice-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.voice-filter button {
+  font-size: 10px;
+  padding: 7px 9px;
+}
+.voice-filter button[aria-pressed="true"],
+.emotion-presets button[aria-pressed="true"] {
+  background: #dfad5026;
+  border-color: #dfad50;
+  color: #efc477;
+}
+.voice-description {
+  font-size: 11px;
+  color: #ada398;
+  margin: 13px 0 22px;
+}
+.gender-tag {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 4px 7px;
+  margin-right: 8px;
+  border: 1px solid #667ca17a;
+  color: #aabfdf;
+}
+.gender-tag.female {
+  border-color: #a27c957a;
+  color: #d9acc9;
+}
+.emotion-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 12px;
+}
+.emotion-heading small {
+  font-size: 10px;
+}
+.emotion-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.emotion-presets button {
+  font-size: 10px;
+  padding: 8px 4px;
+  min-height: 34px;
+}
+@media (max-width: 760px) {
+  .emotion-presets {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .emotion-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

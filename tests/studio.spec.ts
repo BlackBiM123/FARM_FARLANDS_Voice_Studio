@@ -88,6 +88,20 @@ test("casting, persistence, generation, comparison and Godot export", async ({
   await page.getByLabel("Имя", { exact: true }).fill("Тестовый NPC");
   await page.getByLabel("Роль", { exact: true }).fill("Тестовая роль");
   await page.getByLabel("Голос Gemini").selectOption("Charon");
+  await expect(
+    page.getByLabel("Голос Gemini").locator("option:checked"),
+  ).toContainText("Мужской · Male");
+  await page
+    .getByRole("button", { name: "Женские · Female", exact: true })
+    .click();
+  await expect(page.locator(".gender-tag")).toContainText("Женский · Female");
+  await page.getByRole("button", { name: "Все голоса", exact: true }).click();
+  await page.getByLabel("Голос Gemini").selectOption("Charon");
+  await expect(page.locator(".emotion-presets button")).toHaveCount(24);
+  await page.getByRole("button", { name: "Сарказм", exact: true }).click();
+  await expect(page.getByLabel("Эмоция и настроение")).toHaveValue(
+    "Саркастично, с насмешкой и ироничными акцентами",
+  );
   await page.getByLabel("Текст реплики").fill("Проверка голоса");
   await expect(page.getByLabel("Голос Gemini")).toHaveValue("Charon");
   await page.getByLabel("Эмоция и настроение").fill("Холодная решимость");

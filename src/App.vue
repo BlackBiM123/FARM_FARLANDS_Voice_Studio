@@ -18,6 +18,29 @@ import { initialNPCs } from "./data";
 import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
 import QuotaPanel from "./components/QuotaPanel.vue";
+import { voiceInfo, genderLabel, emotionPresets } from "./voice-options";
+const voiceFilter = ref<"all" | "male" | "female">("all");
+function visibleVoices(gender: "male" | "female") {
+  return voices.filter(
+    (v) =>
+      voiceInfo[v].gender === gender &&
+      (voiceFilter.value === "all" ||
+        voiceFilter.value === gender ||
+        v === npc.value?.settings.voice),
+  );
+}
+function filterVoices(gender: "all" | "male" | "female") {
+  voiceFilter.value = gender;
+  if (
+    npc.value &&
+    gender !== "all" &&
+    voiceInfo[npc.value.settings.voice].gender !== gender
+  ) {
+    npc.value.settings.voice = voices.find(
+      (v) => voiceInfo[v].gender === gender,
+    )!;
+  }
+}
 const quotaPanel = ref<InstanceType<typeof QuotaPanel> | null>(null);
 const authenticated = ref(false),
   loginBusy = ref(false);
@@ -407,7 +430,22 @@ function pauseOthers(e: Event) {
           <div class="fields">
             <label
               >Голос Gemini<select v-model="npc.settings.voice">
-                <option v-for="v in voices" :key="v">{{ v }}</option>
+                <optgroup
+                  v-for="gender in ['female', 'male'] as const"
+                  :key="gender"
+                  :label="
+                    gender === 'female' ? 'Женские · Female' : 'Мужские · Male'
+                  "
+                >
+                  <option
+                    v-for="v in visibleVoices(gender)"
+                    :key="v"
+                    :value="v"
+                  >
+                    {{ v }} — {{ genderLabel(v) }} ·
+                    {{ voiceInfo[v].character }}
+                  </option>
+                </optgroup>
               </select></label
             ><label
               >Модель<select v-model="npc.settings.model">
@@ -420,6 +458,50 @@ function pauseOthers(e: Event) {
                 </option>
               </select></label
             >
+          </div>
+          <div class="voice-filter" role="group" aria-label="Фильтр голосов">
+            <button
+              type="button"
+              :aria-pressed="voiceFilter === 'all'"
+              @click="filterVoices('all')"
+            >
+              Все голоса</button
+            ><button
+              type="button"
+              :aria-pressed="voiceFilter === 'male'"
+              @click="filterVoices('male')"
+            >
+              Мужские · Male</button
+            ><button
+              type="button"
+              :aria-pressed="voiceFilter === 'female'"
+              @click="filterVoices('female')"
+            >
+              Женские · Female
+            </button>
+          </div>
+          <p class="voice-description">
+            <span
+              class="gender-tag"
+              :class="voiceInfo[npc.settings.voice].gender"
+              >{{ genderLabel(npc.settings.voice) }}</span
+            >
+            {{ voiceInfo[npc.settings.voice].character }}
+          </p>
+          <div class="emotion-heading">
+            <h3>Пресеты эмоций</h3>
+            <small>Выберите подачу одним нажатием</small>
+          </div>
+          <div class="emotion-presets" role="group" aria-label="Пресеты эмоций">
+            <button
+              v-for="preset in emotionPresets"
+              :key="preset.label"
+              type="button"
+              :aria-pressed="npc.settings.emotion === preset.emotion"
+              @click="npc.settings.emotion = preset.emotion"
+            >
+              {{ preset.label }}
+            </button>
           </div>
           <label
             >Эмоция и настроение<input
