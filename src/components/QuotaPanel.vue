@@ -62,6 +62,13 @@ function setLimit(key: "rpm" | "rpd" | "tpm", e: Event) {
     <p v-if="q.state.value.lastError[model]" class="hint">
       Последний ответ: {{ q.state.value.lastError[model] }}
     </p>
+    <p
+      v-if="q.state.value.lastError[model] && !q.state.value.blocked[model]"
+      class="hint"
+    >
+      Google не сообщил время повторной попытки. Точный срок ожидания
+      неизвестен.
+    </p>
     <details>
       <summary>Настроить лимиты проекта</summary>
       <div class="fields quota-fields">
