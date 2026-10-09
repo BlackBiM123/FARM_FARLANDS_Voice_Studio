@@ -447,7 +447,7 @@ async function generate() {
     await takesDB("put", take);
     takes.value.push(take);
     urls.value[take.id] = URL.createObjectURL(take.blob);
-    notice.value = "Дубль создан и сохранён";
+    notice.value = "Дубль сохранён в этом браузере";
     if (cloudReady.value) {
       try {
         await uploadTake(take);
@@ -561,7 +561,10 @@ function pauseOthers(e: Event) {
       ><button :class="{ chosen: tab === 'casting' }" @click="tab = 'casting'">
         Кастинг озвучки</button
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
-      ><small>{{ npcs.length }} ПЕРСОНАЖЕЙ · ЛОКАЛЬНЫЙ ПРОЕКТ</small>
+      ><small
+        >{{ npcs.length }} ПЕРСОНАЖЕЙ ·
+        {{ cloudConfigured ? "ОБЛАЧНЫЙ ПРОЕКТ" : "ЛОКАЛЬНЫЙ ПРОЕКТ" }}</small
+      >
     </nav>
     <section class="cloud-status panel">
       <div>
@@ -928,8 +931,12 @@ function pauseOthers(e: Event) {
           </div>
         </article>
         <p class="takes-note">
-          Настройки и аудио сохраняются в этом браузере. Экспортируйте пакет
-          Godot для резервной копии.
+          {{
+            cloudConfigured
+              ? "Настройки и дубли синхронизируются с облаком. Статус сохранения — вверху страницы."
+              : "Настройки и аудио сохраняются в этом браузере."
+          }}
+          Экспортируйте пакет Godot для резервной копии.
         </p>
       </aside>
     </div>
