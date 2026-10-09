@@ -96,3 +96,43 @@ it("rejects non-WAV uploads without storing files", async () => {
   expect(r.status).toBe(400);
   expect(upload).not.toHaveBeenCalled();
 });
+it("uses file size from the Storage info response when saving take metadata", async () => {
+  const insert = vi.fn().mockResolvedValue({ error: null });
+  const query = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    insert,
+  };
+  const info = vi
+    .fn()
+    .mockResolvedValue({ data: { size: 119394, metadata: {} }, error: null });
+  vi.mocked(createClient).mockReturnValue({
+    from: () => query,
+    storage: { from: () => ({ info }) },
+  } as unknown as ReturnType<typeof createClient>);
+  const metadata = {
+    id: "17f6e1e9-9f83-4b73-912a-bcb8359736de",
+    npcId: "test-npc",
+    text: "Test",
+    settings: {
+      voice: "Kore",
+      model: "gemini-3.8-flash-tts",
+      emotion: "Calm",
+      pace: 1,
+      direction: "",
+    },
+    language: "en",
+    createdAt: "2026-10-09T12:00:00.000Z",
+    gameCharacter: true,
+    favorite: false,
+  };
+  const r = await handleCloud(request("/api/cloud", "POST", metadata));
+  expect(r.status).toBe(200);
+  expect(insert).toHaveBeenCalledWith(
+    expect.objectContaining({
+      bytes: 119394,
+      audio_path: metadata.id + ".wav",
+    }),
+  );
+});

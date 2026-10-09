@@ -120,7 +120,7 @@ export async function handleCloud(request: Request) {
       const file = await db.storage.from("studio-audio").info(t.id + ".wav");
       if (file.error || !file.data)
         return json({ error: "Сначала загрузите аудио дубля" }, 400);
-      const bytes = Number(file.data.metadata?.size);
+      const bytes = Number(file.data.size ?? file.data.metadata?.size);
       if (!Number.isFinite(bytes) || bytes < 1 || bytes > 4000000)
         return json({ error: "Некорректный размер аудио" }, 400);
       const { error } = await db
