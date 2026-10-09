@@ -54,3 +54,4 @@ Live application: https://farm-farlands-voice-studio.vercel.app/
 The initial production deployment is READY on Vercel with `GENERATION_ENABLED=false`. Its UI returns HTTP 200, and unauthenticated POST /api/tts returns HTTP 401. The browser starts with an empty catalog and reports no console warnings/errors. No Gemini synthesis call was made.
 
 Source has been pushed to `main`. Deployment was uploaded from reviewed local files because Vercel's existing GitHub connection returned an authentication error. Automatic GitHub deployments remain pending until that connection is reauthorized and this repository is linked in the Vercel project's Git settings.
+
