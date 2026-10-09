@@ -4,6 +4,18 @@ import {
   type TakeMetadata,
 } from "../shared/schema";
 import type { Take } from "./storage";
+export async function authenticatedFetch(path: string, options?: RequestInit) {
+  let r = await fetch(path, options);
+  if (r.status === 401) {
+    try {
+      const refreshed = await fetch("/api/session");
+      const state = await refreshed.json();
+      if (state.authenticated) r = await fetch(path, options);
+    } catch {}
+    if (r.status === 401) window.dispatchEvent(new Event("studio-auth-lost"));
+  }
+  return r;
+}
 export class CloudError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -17,7 +29,7 @@ export async function cloudRequest(
   body?: unknown,
 ) {
   const binary = body instanceof Blob;
-  const r = await fetch(path, {
+  const r = await authenticatedFetch(path, {
     method,
     headers: body
       ? { "Content-Type": binary ? "audio/wav" : "application/json" }
@@ -54,7 +66,9 @@ export async function uploadTake(t: Take) {
 }
 export async function downloadTake(t: Take) {
   if (t.blob.size) return t.blob;
-  const r = await fetch("/api/audio?id=" + encodeURIComponent(t.id));
+  const r = await authenticatedFetch(
+    "/api/audio?id=" + encodeURIComponent(t.id),
+  );
   if (!r.ok) throw new Error("Не удалось скачать аудио из облака");
   return r.blob();
 }

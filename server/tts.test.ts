@@ -130,3 +130,14 @@ describe("Protected Gemini proxy", () => {
     expect(await r.text()).not.toContain("secret");
   });
 });
+vi.mock("./auth.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./auth.js")>();
+  return {
+    ...actual,
+    authorized: vi.fn(
+      async (request: Request) =>
+        request.headers.get("authorization") ===
+        "Bearer test-only-access-code-123456789",
+    ),
+  };
+});

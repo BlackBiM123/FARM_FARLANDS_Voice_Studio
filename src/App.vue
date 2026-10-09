@@ -21,6 +21,16 @@ const gameCharacter = ref(loadGameCharacter());
 import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
 import QuotaPanel from "./components/QuotaPanel.vue";
+import UserAdmin from "./components/UserAdmin.vue";
+const sessionChecking = ref(true),
+  loginUsername = ref(""),
+  loginError = ref(""),
+  account = ref<{
+    id: string;
+    username: string;
+    role: "admin" | "user";
+  } | null>(null),
+  usersOpen = ref(false);
 import { voiceInfo, genderLabel, emotionPresets } from "./voice-options";
 import {
   cloudRequest,
@@ -28,6 +38,7 @@ import {
   uploadTake,
   downloadTake,
   CloudError,
+  authenticatedFetch,
 } from "./cloud-client";
 const cloudConfigured = ref(false),
   cloudReady = ref(false),
@@ -245,24 +256,40 @@ async function login() {
     const r = await fetch("/api/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: token.value }),
+      body: JSON.stringify({
+        username: loginUsername.value,
+        password: token.value,
+      }),
     });
     const data = await r.json();
     if (!r.ok) throw Error(data.error);
     authenticated.value = true;
+    account.value = data.user;
+    loginError.value = "";
     token.value = "";
     accessOpen.value = false;
     notice.value = "Вход сохранён на 30 дней в этом браузере";
     await syncCloud();
   } catch (e) {
-    notice.value = e instanceof Error ? e.message : "Ошибка входа";
+    loginError.value = e instanceof Error ? e.message : "Ошибка входа";
   } finally {
     loginBusy.value = false;
   }
 }
+function lostSession() {
+  authenticated.value = false;
+  account.value = null;
+  cloudReady.value = false;
+  usersOpen.value = false;
+  clearTimeout(cloudTimer);
+  loginError.value = "Сессия завершена или доступ отключён. Войдите снова.";
+}
+onUnmounted(() => window.removeEventListener("studio-auth-lost", lostSession));
 async function logout() {
   await fetch("/api/session", { method: "DELETE" });
   authenticated.value = false;
+  account.value = null;
+  usersOpen.value = false;
   cloudReady.value = false;
   cloudConfigured.value = false;
   cloudMessage.value = "Войдите для облачной синхронизации";
@@ -314,10 +341,14 @@ watch(
   { deep: true },
 );
 onMounted(async () => {
+  window.addEventListener("studio-auth-lost", lostSession);
   try {
     const r = await fetch("/api/session");
-    authenticated.value = (await r.json()).authenticated === true;
+    const data = await r.json();
+    authenticated.value = data.authenticated === true;
+    account.value = data.user ?? null;
   } catch {}
+  sessionChecking.value = false;
   try {
     takes.value = await takesDB("read");
     takes.value.forEach(
@@ -410,7 +441,7 @@ async function generate() {
     gameCharacter: gameCharacter.value,
   };
   try {
-    const r = await fetch("/api/tts", {
+    const r = await authenticatedFetch("/api/tts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -426,6 +457,7 @@ async function generate() {
       const data = await r.json();
       if (r.status === 401) {
         authenticated.value = false;
+        account.value = null;
         accessOpen.value = true;
       }
       if (r.status === 429)
@@ -540,7 +572,33 @@ function pauseOthers(e: Event) {
 </script>
 
 <template>
-  <div class="studio">
+  <div v-if="sessionChecking" class="login-shell"><p>Проверка входа…</p></div>
+  <section v-else-if="!authenticated" class="login-shell">
+    <form class="login-card panel" @submit.prevent="login">
+      <span class="eyebrow">FARM & FARLANDS</span>
+      <h1>Voice Studio</h1>
+      <p>Закрытая студия озвучки. Войдите в свою учётную запись.</p>
+      <label
+        >Логин<input
+          v-model="loginUsername"
+          required
+          autocomplete="username"
+          maxlength="32" /></label
+      ><label
+        >Пароль<input
+          v-model="token"
+          type="password"
+          required
+          autocomplete="current-password"
+          maxlength="128"
+      /></label>
+      <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
+      <button class="primary" :disabled="loginBusy">
+        {{ loginBusy ? "Вход…" : "Войти" }}</button
+      ><small>Доступ выдаёт администратор студии.</small>
+    </form>
+  </section>
+  <div v-else class="studio">
     <header>
       <div>
         <span class="eyebrow">FARM & FARLANDS / AUDIO DEPARTMENT</span>
@@ -548,7 +606,8 @@ function pauseOthers(e: Event) {
       </div>
       <div class="header-actions">
         <button @click="accessOpen = true">
-          <Settings2 :size="15" /> Доступ к API</button
+          <Settings2 :size="15" />
+          {{ account?.username ?? "Учётная запись" }}</button
         ><button @click="exportProject"><Download :size="15" /> JSON</button
         ><button class="primary" @click="exportGodot">
           <Download :size="15" /> Экспорт в Godot
@@ -566,6 +625,15 @@ function pauseOthers(e: Event) {
         {{ cloudConfigured ? "ОБЛАЧНЫЙ ПРОЕКТ" : "ЛОКАЛЬНЫЙ ПРОЕКТ" }}</small
       >
     </nav>
+    <div v-if="account?.role === 'admin'" class="admin-toolbar">
+      <button @click="usersOpen = !usersOpen">
+        {{ usersOpen ? "Закрыть пользователей" : "Пользователи" }}</button
+      ><span>Администратор</span>
+    </div>
+    <UserAdmin
+      v-if="usersOpen && account?.role === 'admin'"
+      :current-id="account.id"
+    />
     <section class="cloud-status panel">
       <div>
         <strong>{{
@@ -966,34 +1034,15 @@ function pauseOthers(e: Event) {
         >
           <X />
         </button>
-        <h2 id="access-title">Доступ к студии</h2>
+        <h2 id="access-title">Учётная запись</h2>
         <template v-if="authenticated"
           ><p>
-            Вход уже сохранён в этом браузере на 30 дней. Повторно вводить код
-            после обновления страницы не требуется.
+            Вы вошли как {{ account?.username }}. Роль:
+            {{ account?.role === "admin" ? "администратор" : "пользователь" }}.
+            Вход сохраняется в этом браузере.
           </p>
           <button @click="logout">Выйти из студии</button></template
         >
-        <template v-else>
-          <p>
-            Введите код доступа владельца сервера. Ключ Gemini хранится только
-            на сервере.
-          </p>
-          <label
-            >Код доступа<input
-              v-model="token"
-              type="password"
-              autocomplete="off"
-              @keyup.enter="login"
-          /></label>
-          <p class="hint">
-            Вход сохраняется на 30 дней в защищённом cookie. Код не попадает в
-            экспорт проекта.
-          </p>
-          <button class="primary" :disabled="loginBusy" @click="login">
-            {{ loginBusy ? "Вход…" : "Продолжить" }}
-          </button>
-        </template>
       </section>
     </div>
     <div v-if="compared.length" class="compare">

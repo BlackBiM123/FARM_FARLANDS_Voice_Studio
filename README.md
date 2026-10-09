@@ -9,11 +9,11 @@ Node 24 is required. Run `npm ci`, then `npm run dev`. The Vite development serv
 Copy `.env.example` to `.env.local` and configure **server-only** values:
 
 - `GEMINI_API_KEY`: Gemini Developer API key, restricted to the intended API/project.
-- `STUDIO_ACCESS_TOKEN`: a random secret of at least 24 characters. Enter this studio access code in the app, never the Gemini key.
+- `STUDIO_ACCESS_TOKEN`: legacy variable; ignored by the current authentication system.
 - `GENERATION_ENABLED`: defaults to false. Set true only after confirming account quotas and approving any possible charges.
 - `STUDIO_ORIGIN`: exact allowed origin; same-origin requests are also permitted.
 
-Never use `VITE_` prefixes for secrets. They would put secrets in the public client bundle. The access code establishes a signed HttpOnly, Secure, SameSite=Strict session cookie valid for 30 days. It is not stored in the client project or localStorage. The access dialog supports signing out. Unauthorized requests are rejected before any provider call. The API validates input, restricts models/voices, limits test text to 600 characters, sets a 90-second provider timeout and caps WAV responses at 4 MB. Errors omit provider bodies and secrets. Logs contain only a request ID and status. This is a private owner studio with a shared access code, not a multi-user authentication system. There is no distributed application rate limiter: keep the access code private and configure Vercel Firewall rate limits and provider quotas before allowing wider access.
+Never use `VITE_` prefixes for secrets. They would put secrets in the public client bundle. Supabase Auth verifies username/password credentials; access and refresh tokens are stored in HttpOnly, Secure, SameSite=Strict cookies. Refresh-cookie retention is 30 days. It is not stored in the client project or localStorage. The access dialog supports signing out. Unauthorized requests are rejected before any provider call. The API validates input, restricts models/voices, limits test text to 600 characters, sets a 90-second provider timeout and caps WAV responses at 4 MB. Errors omit provider bodies and secrets. Logs contain only a request ID and status. This is a private multi-user studio. Administrators manage admitted accounts; normal users share the studio project and cannot administer accounts. Legacy access codes and signed cookies are rejected. There is no distributed application rate limiter: keep the access code private and configure Vercel Firewall rate limits and provider quotas before allowing wider access.
 
 ## Vercel / GitHub
 
@@ -63,7 +63,7 @@ This is not an authoritative project-wide remaining quota. Other applications, d
 
 ## Supabase cloud persistence
 
-Project: `lgieykyijdpqzxyyoueh` (`farm-farlands-voice-studio`), Free organization. Migration `supabase/migrations/001_studio.sql` has been applied: `studio_projects`, `studio_takes` and private `studio-audio` bucket. Tables have RLS enabled and no anonymous/authenticated access; the Vercel server authorizes the owner studio cookie before using a server Secret key. This is a single shared studio, not separate per-user workspaces. Anyone holding the studio access code can access the shared project.
+Project: `lgieykyijdpqzxyyoueh` (`farm-farlands-voice-studio`), Free organization. Migration `supabase/migrations/001_studio.sql` has been applied: `studio_projects`, `studio_takes` and private `studio-audio` bucket. Tables have RLS enabled and no anonymous/authenticated access; the Vercel server authorizes the owner studio cookie before using a server Secret key. This is a single shared studio, not separate per-user workspaces. Only users explicitly admitted by a studio administrator can access the shared project.
 
 Production variables: `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (Supabase `sb_secret_...`, or legacy service-role key). The secret is never exposed in browser bundles. Preview and local development remain local-only unless explicitly configured with their own server variables.
 
@@ -72,3 +72,13 @@ NPC settings autosave with an 800ms delay and optimistic revision checks. A stal
 WAV files are stored privately and streamed through `/api/audio` only after studio authentication. Audio downloads are lazy, reducing transfer usage. Godot export downloads missing cloud audio before building its ZIP. New takes and favorites are synced. Deleting a take hides it through a tombstone; its file is retained in the private bucket for recovery and continues to use storage. There is no permanent-purge UI yet. The storage counter measures registered recording bytes including hidden takes; orphan uploads are not measured by this counter.
 
 Free tier currently includes 500 MB database and 1 GB file storage, subject to Supabase limits; free projects may pause after a week of low activity. No paid plan or billing was enabled. Keep exported backups: automatic database backups are not included in the Free plan.
+
+## Password login and user administration
+
+The public page displays only the login screen until Supabase Auth verifies a studio-admitted account. All cloud, audio and TTS routes revalidate the user against Supabase Auth. Studio admission, enabled state and role are trusted only from server-managed `app_metadata`; user-editable metadata cannot grant access. Old bearer access codes and legacy cookies have no effect. There is no public signup in the studio; accounts created independently in Supabase cannot enter unless an administrator admits them.
+
+Studio usernames are mapped to synthetic internal email identifiers under `accounts.farlands.invalid`; those addresses are not contact addresses and no confirmation emails are sent. Passwords are stored and verified by Supabase Auth, never in application source or database tables. Administrators can add users, assign roles, disable access and set a new password. They cannot disable or demote themselves through the app. The user list is capped at 100 studio accounts.
+
+Initial admin provisioning uses a one-time server-only `STUDIO_BOOTSTRAP_TOKEN`. It can only create the `admin` administrator before any studio account exists. Disable that variable after provisioning. Subsequent users are created only by an authenticated administrator. New-user passwords require at least 12 characters; the initial master credential follows the owner's explicit password choice. No master password is committed in this repository.
+
+GET /api/session refreshes expired access using its HttpOnly refresh cookie. API clients retry an authentication failure once after session refresh, then return to the login screen. Supabase Auth applies its provider-side authentication limits; no distributed custom login limiter is configured. These are application-level access controls; static HTML/JS/CSS login assets remain publicly downloadable.

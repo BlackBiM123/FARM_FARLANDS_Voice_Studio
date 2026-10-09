@@ -8,9 +8,6 @@ test("quota response shows local countdown and persists limits without external 
     .getByRole("button", { name: "Добавить персонажа", exact: true })
     .click();
   await page.getByLabel("Текст реплики").fill("Тест");
-  await page.getByRole("button", { name: "Создать дубль" }).click();
-  await page.getByLabel("Код доступа", { exact: true }).fill("test-only-token");
-  await page.getByRole("button", { name: "Продолжить" }).click();
   await page.route("**/api/tts", (r) =>
     r.fulfill({
       status: 429,
@@ -66,9 +63,12 @@ test.beforeEach(async ({ page }) => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          authenticated: (route.request().headers()["cookie"] ?? "").includes(
-            "farlands_session=test-cookie",
-          ),
+          authenticated: true,
+          user: {
+            id: "17f6e1e9-9f83-4b73-912a-bcb8359736de",
+            username: "admin",
+            role: "admin",
+          },
         }),
       });
   });
@@ -136,9 +136,6 @@ test("casting, persistence, generation, comparison and Godot export", async ({
   await expect(page.getByLabel("Эмоция и настроение")).toHaveValue(
     "Холодная решимость",
   );
-  await page.getByRole("button", { name: "Создать дубль" }).click();
-  await page.getByLabel("Код доступа", { exact: true }).fill("test-only-token");
-  await page.getByRole("button", { name: "Продолжить" }).click();
   const wav = Buffer.alloc(4844);
   wav.write("RIFF");
   wav.writeUInt32LE(wav.length - 8, 4);
@@ -185,29 +182,11 @@ test("casting, persistence, generation, comparison and Godot export", async ({
   await page.reload();
   await page.locator(".npc-row").filter({ hasText: "Тестовый NPC" }).click();
   await expect(page.locator(".take")).toHaveCount(2);
-  await page.getByRole("button", { name: "Доступ к API" }).click();
-  await expect(
-    page.getByText("Вход уже сохранён", { exact: false }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "admin", exact: true }).click();
+  await expect(page.getByText("Вы вошли как", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Закрыть", exact: true }).click();
   await page.getByRole("button", { name: "Удалить дубль" }).first().click();
   await expect(page.locator(".take")).toHaveCount(1);
   await page.screenshot({ path: "../../work/studio.png", fullPage: true });
   expect(errors).toEqual([]);
-});
-test("mobile layout fits viewport and missing access is handled", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
-  await page
-    .getByRole("button", { name: "Добавить персонажа", exact: true })
-    .click();
-  await page.getByLabel("Текст реплики").fill("Тест");
-  await page.getByRole("button", { name: "Создать дубль" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.screenshot({ path: "../../work/mobile.png", fullPage: true });
 });

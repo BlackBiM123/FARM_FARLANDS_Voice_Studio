@@ -1,13 +1,23 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-export const cookieName = "farlands_session";
-export function validCode(code: string) {
-  const secret = process.env.STUDIO_ACCESS_TOKEN;
+import type { User } from "@supabase/supabase-js";
+import { cloudClient } from "./supabase.js";
+export const cookieName = "farlands_access",
+  refreshCookieName = "farlands_refresh";
+export function cookie(request: Request, name: string) {
   return (
-    !!secret &&
-    secret.length >= 24 &&
-    Buffer.byteLength(secret) === Buffer.byteLength(code) &&
-    timingSafeEqual(Buffer.from(secret), Buffer.from(code))
+    request.headers
+      .get("cookie")
+      ?.split(";")
+      .map((x) => x.trim())
+      .find((x) => x.startsWith(name + "="))
+      ?.slice(name.length + 1) ?? ""
   );
+}
+export function accessToken(request: Request) {
+  const token =
+    cookie(request, cookieName) ||
+    request.headers.get("authorization")?.replace(/^Bearer /, "") ||
+    "";
+  return token.split(".").length === 3 ? token : "";
 }
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
@@ -17,46 +27,57 @@ export function sameOrigin(request: Request) {
     origin === process.env.STUDIO_ORIGIN
   );
 }
-export function makeSession() {
-  const expires = String(Date.now() + 30 * 86400000);
+export function publicUser(user: User) {
+  return {
+    id: user.id,
+    username: user.email?.split("@")[0] ?? "user",
+    name: user.user_metadata?.display_name ?? "",
+    role: user.app_metadata?.studio_role === "admin" ? "admin" : "user",
+    enabled: user.app_metadata?.studio_enabled !== false,
+    createdAt: user.created_at,
+    lastLogin: user.last_sign_in_at ?? null,
+  };
+}
+export function admitted(user: User | null) {
   return (
-    expires +
-    "." +
-    createHmac("sha256", process.env.STUDIO_ACCESS_TOKEN!)
-      .update(expires)
-      .digest("hex")
+    !!user &&
+    user.app_metadata?.studio_access === true &&
+    user.app_metadata?.studio_enabled !== false
   );
 }
-export function authorized(request: Request) {
-  if (
-    validCode(
-      request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "",
-    )
-  )
-    return true;
-  const value = request.headers
-    .get("cookie")
-    ?.split(";")
-    .map((x) => x.trim())
-    .find((x) => x.startsWith(cookieName + "="))
-    ?.slice(cookieName.length + 1);
-  if (!value) return false;
-  const [expires, signature] = value.split(".");
-  if (
-    !expires ||
-    !signature ||
-    !process.env.STUDIO_ACCESS_TOKEN ||
-    process.env.STUDIO_ACCESS_TOKEN.length < 24 ||
-    !Number.isFinite(Number(expires)) ||
-    Number(expires) < Date.now() ||
-    Number(expires) > Date.now() + 31 * 86400000
-  )
-    return false;
-  const expected = createHmac("sha256", process.env.STUDIO_ACCESS_TOKEN)
-    .update(expires)
-    .digest("hex");
-  return (
-    /^[0-9a-f]{64}$/.test(signature) &&
-    timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+export async function currentUser(request: Request) {
+  const token = accessToken(request);
+  if (!token) return null;
+  const db = cloudClient();
+  if (!db) return null;
+  try {
+    const { data, error } = await db.auth.getUser(token);
+    return !error && admitted(data.user) ? data.user : null;
+  } catch {
+    return null;
+  }
+}
+export async function authorized(request: Request) {
+  return !!(await currentUser(request));
+}
+export const usernamePattern = /^[a-z0-9][a-z0-9._-]{2,31}$/;
+export function userEmail(username: string) {
+  return username.toLowerCase() + "@accounts.farlands.invalid";
+}
+export function sessionHeaders(
+  request: Request,
+  session?: { access_token: string; refresh_token: string; expires_in: number },
+) {
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  const suffix = `; Path=/api; HttpOnly; SameSite=Strict${new URL(request.url).protocol === "https:" ? "; Secure" : ""}`;
+  headers.append(
+    "Set-Cookie",
+    `${cookieName}=${session?.access_token ?? ""}; Max-Age=${session?.expires_in ?? 0}${suffix}`,
   );
+  headers.append(
+    "Set-Cookie",
+    `${refreshCookieName}=${session?.refresh_token ?? ""}; Max-Age=${session ? 2592000 : 0}${suffix}`,
+  );
+  headers.append("Set-Cookie", `farlands_session=; Max-Age=0${suffix}`);
+  return headers;
 }

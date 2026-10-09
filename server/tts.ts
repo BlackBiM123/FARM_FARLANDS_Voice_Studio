@@ -8,7 +8,7 @@ const json = (data: unknown, status = 200) =>
 export async function handleTTS(request: Request): Promise<Response> {
   if (request.method !== "POST")
     return json({ error: "Метод не поддерживается" }, 405);
-  if (!authorized(request))
+  if (!(await authorized(request)))
     return json({ error: "Введите действительный код доступа к студии" }, 401);
   if (!sameOrigin(request))
     return json({ error: "Недопустимый источник запроса" }, 403);

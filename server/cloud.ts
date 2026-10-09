@@ -1,30 +1,19 @@
-import { createClient } from "@supabase/supabase-js";
+import { cloudClient } from "./supabase.js";
+export { cloudClient } from "./supabase.js";
 import { z } from "zod";
 import { authorized, sameOrigin } from "./auth.js";
 import { projectSchema, takeMetadataSchema } from "../shared/schema.js";
 const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-export function cloudClient() {
-  const url = process.env.SUPABASE_URL,
-    key = process.env.SUPABASE_SECRET_KEY;
-  return url && key
-    ? createClient(url, key, {
-        auth: { persistSession: false, autoRefreshToken: false },
-        global: {
-          fetch: (url, options) =>
-            fetch(url, { ...options, signal: AbortSignal.timeout(25000) }),
-        },
-      })
-    : null;
-}
-export function cloudGuard(request: Request) {
-  if (!authorized(request)) return json({ error: "Войдите в студию" }, 401);
+export async function cloudGuard(request: Request) {
+  if (!(await authorized(request)))
+    return json({ error: "Войдите в студию" }, 401);
   if (!sameOrigin(request))
     return json({ error: "Недопустимый источник запроса" }, 403);
   return null;
 }
 export async function handleCloud(request: Request) {
-  const denied = cloudGuard(request);
+  const denied = await cloudGuard(request);
   if (denied) return denied;
   const db = cloudClient();
   if (!db)
@@ -123,16 +112,14 @@ export async function handleCloud(request: Request) {
       const bytes = Number(file.data.size ?? file.data.metadata?.size);
       if (!Number.isFinite(bytes) || bytes < 1 || bytes > 4000000)
         return json({ error: "Некорректный размер аудио" }, 400);
-      const { error } = await db
-        .from("studio_takes")
-        .insert({
-          id: t.id,
-          npc_id: t.npcId,
-          metadata: t,
-          audio_path: t.id + ".wav",
-          bytes,
-          created_at: t.createdAt,
-        });
+      const { error } = await db.from("studio_takes").insert({
+        id: t.id,
+        npc_id: t.npcId,
+        metadata: t,
+        audio_path: t.id + ".wav",
+        bytes,
+        created_at: t.createdAt,
+      });
       if (error && error.code !== "23505") throw new Error("insert");
       return json({ saved: true });
     }

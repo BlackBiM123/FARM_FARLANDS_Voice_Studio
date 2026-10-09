@@ -5,6 +5,7 @@ import { handleTTS } from "./server/tts.js";
 import { handleSession } from "./server/session.js";
 import { handleCloud } from "./server/cloud.js";
 import { handleAudio } from "./server/audio.js";
+import { handleUsers } from "./server/users.js";
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -25,7 +26,7 @@ export default defineConfig(({ mode }) => {
       {
         name: "local-api",
         configureServer(server) {
-          for (const route of ["tts", "session", "cloud", "audio"])
+          for (const route of ["tts", "session", "cloud", "audio", "users"])
             server.middlewares.use("/api/" + route, async (req, res) => {
               try {
                 const chunks: Buffer[] = [];
@@ -71,6 +72,7 @@ export default defineConfig(({ mode }) => {
                   session: handleSession,
                   cloud: handleCloud,
                   audio: handleAudio,
+                  users: handleUsers,
                 }[route]!(request);
                 res.statusCode = response.status;
                 response.headers.forEach((v, k) => res.setHeader(k, v));

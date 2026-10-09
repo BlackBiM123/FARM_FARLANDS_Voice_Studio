@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { cloudClient, cloudGuard } from "./cloud.js";
 export async function handleAudio(request: Request) {
-  const denied = cloudGuard(request);
+  const denied = await cloudGuard(request);
   if (denied) return denied;
   const db = cloudClient();
   if (!db)

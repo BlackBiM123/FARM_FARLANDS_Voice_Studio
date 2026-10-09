@@ -136,3 +136,14 @@ it("uses file size from the Storage info response when saving take metadata", as
     }),
   );
 });
+vi.mock("./auth.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./auth.js")>();
+  return {
+    ...actual,
+    authorized: vi.fn(
+      async (request: Request) =>
+        request.headers.get("authorization") ===
+        "Bearer test-cloud-access-1234567890123456",
+    ),
+  };
+});

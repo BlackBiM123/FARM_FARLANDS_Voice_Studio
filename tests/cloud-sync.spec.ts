@@ -32,7 +32,7 @@ test("cloud project and audio survive a clean browser and stale edits cannot ove
       r.fulfill({
         status: 200,
         contentType: "application/json",
-        body: '{"authenticated":true}',
+        body: '{"authenticated":true,"user":{"id":"17f6e1e9-9f83-4b73-912a-bcb8359736de","username":"admin","role":"admin"}}',
       }),
     );
     await p.route("**/api/tts", (r) =>
