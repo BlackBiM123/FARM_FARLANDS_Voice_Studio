@@ -1,5 +1,6 @@
 import { projectSchema, type NPC, type Settings } from "../shared/schema";
 export type Take = {
+  remote?: boolean;
   gameCharacter?: boolean;
   id: string;
   npcId: string;

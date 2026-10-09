@@ -42,6 +42,13 @@ test("quota response shows local countdown and persists limits without external 
   });
 });
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/cloud", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: false }),
+    }),
+  );
   await page.route("**/api/session", async (route) => {
     const method = route.request().method();
     if (method === "POST")

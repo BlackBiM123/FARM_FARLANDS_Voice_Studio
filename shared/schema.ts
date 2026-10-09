@@ -45,3 +45,14 @@ export const projectSchema = z.object({
 });
 export type NPC = z.infer<typeof npcSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
+export const takeMetadataSchema = z.object({
+  id: z.string().uuid(),
+  npcId: z.string().regex(/^[a-z0-9_-]{1,60}$/),
+  text: z.string().max(600),
+  settings: settingsSchema,
+  language: z.enum(["ru", "en"]),
+  createdAt: z.string().datetime(),
+  gameCharacter: z.boolean().optional(),
+  favorite: z.boolean(),
+});
+export type TakeMetadata = z.infer<typeof takeMetadataSchema>;

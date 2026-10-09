@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, nextTick, ref, watch } from "vue";
 import {
   AudioLines,
   Download,
@@ -22,6 +22,198 @@ import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
 import QuotaPanel from "./components/QuotaPanel.vue";
 import { voiceInfo, genderLabel, emotionPresets } from "./voice-options";
+import {
+  cloudRequest,
+  readCloud,
+  uploadTake,
+  downloadTake,
+  CloudError,
+} from "./cloud-client";
+const cloudConfigured = ref(false),
+  cloudReady = ref(false),
+  cloudWorking = ref(false),
+  cloudConflict = ref(false),
+  cloudMessage = ref("Войдите для облачной синхронизации"),
+  cloudBytes = ref(0);
+let cloudRevision: number | null = null,
+  applyingCloud = false,
+  cloudTimer: ReturnType<typeof setTimeout> | undefined,
+  cloudDirty = false;
+try {
+  const saved = localStorage.getItem("farlands-cloud-revision");
+  cloudRevision = saved === null ? null : Number(saved);
+  cloudDirty =
+    localStorage.getItem("farlands-cloud-dirty") === "true" ||
+    (cloudRevision === null && loadProject(initialNPCs).length > 0);
+} catch {}
+function snapshotProject() {
+  return projectSchema.parse({
+    version: 1,
+    npcs: npcs.value,
+    gameCharacter: gameCharacter.value,
+  });
+}
+function rememberDirty(value: boolean) {
+  cloudDirty = value;
+  try {
+    localStorage.setItem("farlands-cloud-dirty", String(value));
+  } catch {}
+}
+function rememberRevision(value: number) {
+  cloudRevision = value;
+  try {
+    localStorage.setItem("farlands-cloud-revision", String(value));
+  } catch {}
+}
+function scheduleCloud() {
+  if (!cloudReady.value || !authenticated.value || cloudConflict.value) return;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(() => void pushProject(), 800);
+}
+onUnmounted(() => clearTimeout(cloudTimer));
+async function pushProject() {
+  if (
+    !cloudReady.value ||
+    cloudWorking.value ||
+    cloudConflict.value ||
+    cloudRevision === null ||
+    !cloudDirty
+  )
+    return;
+  let snapshot: ReturnType<typeof snapshotProject>;
+  try {
+    snapshot = snapshotProject();
+  } catch {
+    cloudMessage.value =
+      "Заполните имя и настройки персонажа для сохранения в облако";
+    return;
+  }
+  cloudWorking.value = true;
+  try {
+    const data = await cloudRequest("/api/cloud", "PUT", {
+      project: snapshot,
+      revision: cloudRevision,
+    });
+    rememberRevision(data.revision);
+    rememberDirty(
+      JSON.stringify(snapshot) !== JSON.stringify(snapshotProject()),
+    );
+    cloudMessage.value = cloudDirty
+      ? "Есть новые изменения"
+      : "Сохранено в облаке";
+  } catch (e) {
+    cloudMessage.value = e instanceof Error ? e.message : "Ошибка облака";
+    if (e instanceof CloudError && e.status === 409) {
+      cloudConflict.value = true;
+      cloudReady.value = false;
+    }
+  } finally {
+    cloudWorking.value = false;
+    if (
+      cloudDirty &&
+      !cloudConflict.value &&
+      cloudMessage.value === "Есть новые изменения"
+    )
+      scheduleCloud();
+  }
+}
+async function syncCloud(forceLoad = false) {
+  if (!authenticated.value || cloudWorking.value) return;
+  clearTimeout(cloudTimer);
+  cloudWorking.value = true;
+  cloudMessage.value = "Проверяю облако…";
+  try {
+    const data = await readCloud();
+    if (!data) {
+      cloudMessage.value = "Пока сохраняется в браузере — облако не настроено";
+      cloudConfigured.value = false;
+      return;
+    }
+    cloudConfigured.value = true;
+    cloudBytes.value = data.storedBytes;
+    const local = snapshotProject();
+    const different = JSON.stringify(local) !== JSON.stringify(data.project);
+    if (
+      !forceLoad &&
+      different &&
+      cloudDirty &&
+      data.revision !== 0 &&
+      (cloudRevision === null || cloudRevision !== data.revision)
+    ) {
+      cloudConflict.value = true;
+      cloudReady.value = false;
+      cloudMessage.value =
+        "В облаке другая версия. Локальные изменения сохранены; экспортируйте JSON перед загрузкой облачной версии.";
+      return;
+    }
+    if (forceLoad || !cloudDirty) {
+      applyingCloud = true;
+      if (forceLoad && different)
+        try {
+          localStorage.setItem(
+            "farlands-before-cloud-load",
+            JSON.stringify(local),
+          );
+        } catch {}
+      npcs.value = data.project.npcs;
+      gameCharacter.value = data.project.gameCharacter;
+      if (!npcs.value.some((n) => n.id === selected.value))
+        selected.value = npcs.value[0]?.id ?? "";
+      await nextTick();
+      applyingCloud = false;
+      rememberDirty(false);
+    }
+    rememberRevision(data.revision);
+    cloudConflict.value = false;
+    cloudReady.value = true;
+    for (const id of data.deletedIds) {
+      const t = takes.value.find((x) => x.id === id);
+      if (t) {
+        await takesDB("delete", undefined, id);
+        takes.value = takes.value.filter((x) => x.id !== id);
+        if (urls.value[id]?.startsWith("blob:"))
+          URL.revokeObjectURL(urls.value[id]!);
+        delete urls.value[id];
+      }
+    }
+    for (const meta of data.takes) {
+      const cached = takes.value.find((x) => x.id === meta.id);
+      const t: Take = {
+        ...meta,
+        remote: true,
+        blob: cached?.blob ?? new Blob([], { type: "audio/wav" }),
+      };
+      await takesDB("put", t);
+      if (cached) Object.assign(cached, t);
+      else takes.value.push(t);
+      urls.value[t.id] = t.blob.size
+        ? (urls.value[t.id] ?? URL.createObjectURL(t.blob))
+        : "/api/audio?id=" + t.id;
+    }
+    for (const t of takes.value.filter((t) => !t.remote && t.blob.size)) {
+      await uploadTake(t);
+      t.remote = true;
+      await takesDB("put", t);
+      cloudBytes.value += t.blob.size;
+    }
+    cloudMessage.value = cloudDirty
+      ? "Сохраняю локальные изменения…"
+      : "Синхронизировано с облаком";
+  } catch (e) {
+    cloudMessage.value = e instanceof Error ? e.message : "Облако недоступно";
+  } finally {
+    applyingCloud = false;
+    cloudWorking.value = false;
+    if (cloudReady.value && cloudDirty && !cloudConflict.value) scheduleCloud();
+  }
+}
+async function downloadAudio(t: Take) {
+  try {
+    download(await downloadTake(t), `${t.npcId}_${t.id}.wav`);
+  } catch (e) {
+    notice.value = e instanceof Error ? e.message : "Ошибка загрузки";
+  }
+}
 const voiceFilter = ref<"all" | "male" | "female">("all");
 function visibleVoices(gender: "male" | "female") {
   return voices.filter(
@@ -61,6 +253,7 @@ async function login() {
     token.value = "";
     accessOpen.value = false;
     notice.value = "Вход сохранён на 30 дней в этом браузере";
+    await syncCloud();
   } catch (e) {
     notice.value = e instanceof Error ? e.message : "Ошибка входа";
   } finally {
@@ -70,6 +263,10 @@ async function login() {
 async function logout() {
   await fetch("/api/session", { method: "DELETE" });
   authenticated.value = false;
+  cloudReady.value = false;
+  cloudConfigured.value = false;
+  cloudMessage.value = "Войдите для облачной синхронизации";
+  clearTimeout(cloudTimer);
   accessOpen.value = false;
   token.value = "";
   notice.value = "Вы вышли из студии";
@@ -106,6 +303,10 @@ watch(
   () => {
     try {
       saveProject(npcs.value, gameCharacter.value);
+      if (!applyingCloud) {
+        rememberDirty(true);
+        scheduleCloud();
+      }
     } catch {
       notice.value = "Не удалось сохранить настройки. Экспортируйте JSON.";
     }
@@ -120,11 +321,15 @@ onMounted(async () => {
   try {
     takes.value = await takesDB("read");
     takes.value.forEach(
-      (t) => (urls.value[t.id] = URL.createObjectURL(t.blob)),
+      (t) =>
+        (urls.value[t.id] = t.blob.size
+          ? URL.createObjectURL(t.blob)
+          : "/api/audio?id=" + t.id),
     );
   } catch {
     notice.value = "Хранилище аудио недоступно в этом браузере.";
   }
+  if (authenticated.value) await syncCloud();
 });
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -243,6 +448,19 @@ async function generate() {
     takes.value.push(take);
     urls.value[take.id] = URL.createObjectURL(take.blob);
     notice.value = "Дубль создан и сохранён";
+    if (cloudReady.value) {
+      try {
+        await uploadTake(take);
+        take.remote = true;
+        await takesDB("put", take);
+        cloudBytes.value += take.blob.size;
+        notice.value = "Дубль сохранён в облаке и в браузере";
+      } catch (e) {
+        cloudMessage.value = e instanceof Error ? e.message : "Ошибка облака";
+        notice.value =
+          "Дубль сохранён в браузере. Нажмите «Синхронизировать» для загрузки в облако.";
+      }
+    }
   } catch (e) {
     notice.value = e instanceof Error ? e.message : "Ошибка генерации";
   } finally {
@@ -251,6 +469,7 @@ async function generate() {
 }
 async function removeTake(t: Take) {
   try {
+    if (t.remote) await cloudRequest("/api/cloud", "DELETE", { id: t.id });
     await takesDB("delete", undefined, t.id);
     takes.value = takes.value.filter((x) => x.id !== t.id);
     compare.value = compare.value.filter((x) => x !== t.id);
@@ -262,6 +481,11 @@ async function removeTake(t: Take) {
 }
 async function favorite(t: Take) {
   try {
+    if (t.remote)
+      await cloudRequest("/api/cloud", "PATCH", {
+        id: t.id,
+        favorite: !t.favorite,
+      });
     await takesDB("put", { ...t, favorite: !t.favorite });
     t.favorite = !t.favorite;
   } catch {
@@ -296,7 +520,7 @@ async function exportGodot() {
       })),
     };
     for (const t of takes.value)
-      zip.file(`voice/audio/${t.npcId}_${t.id}.wav`, t.blob);
+      zip.file(`voice/audio/${t.npcId}_${t.id}.wav`, await downloadTake(t));
     zip.file("voice/manifest.json", JSON.stringify(manifest, null, 2));
     zip.file(
       "voice/README.txt",
@@ -339,6 +563,32 @@ function pauseOthers(e: Event) {
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small>{{ npcs.length }} ПЕРСОНАЖЕЙ · ЛОКАЛЬНЫЙ ПРОЕКТ</small>
     </nav>
+    <section class="cloud-status panel">
+      <div>
+        <strong>{{
+          cloudConfigured
+            ? "Облачное сохранение · Supabase"
+            : "Сохранение проекта"
+        }}</strong>
+        <p role="status">
+          {{ cloudWorking ? "Синхронизация…" : cloudMessage }}
+        </p>
+        <small v-if="cloudConfigured"
+          >Аудио в облаке: {{ (cloudBytes / 1000000).toFixed(1) }} МБ ·
+          бесплатное хранилище 1 ГБ</small
+        >
+      </div>
+      <div class="cloud-actions">
+        <button :disabled="cloudWorking || !authenticated" @click="syncCloud()">
+          Синхронизировать</button
+        ><template v-if="cloudConflict"
+          ><button @click="exportProject">Скачать локальный JSON</button
+          ><button :disabled="cloudWorking" @click="syncCloud(true)">
+            Загрузить облачную версию
+          </button></template
+        >
+      </div>
+    </section>
     <section class="game-style panel">
       <label class="game-style-toggle"
         ><input v-model="gameCharacter" type="checkbox" /><span
@@ -648,7 +898,12 @@ function pauseOthers(e: Event) {
             {{ new Date(t.createdAt).toLocaleTimeString("ru") }}</small
           >
           <p>{{ t.text }}</p>
-          <audio controls :src="urls[t.id]" @play="pauseOthers" />
+          <audio
+            controls
+            preload="none"
+            :src="urls[t.id]"
+            @play="pauseOthers"
+          />
           <div class="take-actions">
             <label
               ><input
@@ -659,7 +914,7 @@ function pauseOthers(e: Event) {
               Сравнить</label
             ><button
               class="icon"
-              @click="download(t.blob, `${t.npcId}_${t.id}.wav`)"
+              @click="downloadAudio(t)"
               aria-label="Скачать WAV"
             >
               <Download :size="16" /></button
@@ -750,7 +1005,12 @@ function pauseOthers(e: Event) {
           <strong
             >{{ i ? "B" : "A" }} · {{ t.settings.voice }} ·
             {{ t.settings.emotion }}</strong
-          ><audio controls :src="urls[t.id]" @play="pauseOthers" />
+          ><audio
+            controls
+            preload="none"
+            :src="urls[t.id]"
+            @play="pauseOthers"
+          />
         </div>
       </div>
     </div>

@@ -29,7 +29,7 @@ The [pricing table](https://ai.google.dev/gemini-api/docs/pricing) lists a free 
 
 ## Storage and Godot
 
-NPC settings are saved in localStorage; WAV recordings and take metadata in IndexedDB. There is no cloud sync. Clearing browser data deletes this local project; export backups regularly. JSON import/export transfers NPC settings only. Godot ZIP export includes all saved takes, favorites, immutable generation settings, language, transcript and `res://voice/audio/...wav` paths in `voice/manifest.json`. Copy the `voice` directory into the Godot project. WAVs are playable with `load(path)` after Godot imports them.
+NPC settings are saved in localStorage; WAV recordings and take metadata in IndexedDB. When Supabase is configured, the authenticated studio syncs NPC settings and takes to the shared cloud project. Local storage remains a browser cache and fallback. Clearing browser data removes the local cache; after login cloud data loads again. Unsynced local changes are not recoverable after clearing browser data, so export backups regularly. JSON import/export transfers NPC settings only. Godot ZIP export includes all saved takes, favorites, immutable generation settings, language, transcript and `res://voice/audio/...wav` paths in `voice/manifest.json`. Copy the `voice` directory into the Godot project. WAVs are playable with `load(path)` after Godot imports them.
 
 Example Godot 4:
 
@@ -60,3 +60,15 @@ Source has been pushed to main. The first deployment was uploaded from reviewed 
 The in-studio panel records successful takes in this browser, per model. It displays a daily-reset countdown based on America/Los_Angeles midnight with DST, and a local estimate of request allowance if RPM/RPD limits are known. Limits can be entered inside the studio and are also populated from Google QuotaFailure responses when supplied. RetryInfo supplies a cooldown timer; 429 without retry metadata displays an unknown wait, not an invented duration. The UI prevents generation while a reported cooldown is active.
 
 This is not an authoritative project-wide remaining quota. Other applications, devices, tabs, rejected requests and historical calls are not measured. TPM allowance can be configured, but remaining tokens are unknown. Project-wide monitoring requires additional authenticated Service Usage / Cloud Monitoring access, plus verifying that the model's quota metrics are exposed there. No Google Cloud monitoring credentials have been configured and no external AI Studio link is required by the UI.
+
+## Supabase cloud persistence
+
+Project: `lgieykyijdpqzxyyoueh` (`farm-farlands-voice-studio`), Free organization. Migration `supabase/migrations/001_studio.sql` has been applied: `studio_projects`, `studio_takes` and private `studio-audio` bucket. Tables have RLS enabled and no anonymous/authenticated access; the Vercel server authorizes the owner studio cookie before using a server Secret key. This is a single shared studio, not separate per-user workspaces. Anyone holding the studio access code can access the shared project.
+
+Production variables: `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (Supabase `sb_secret_...`, or legacy service-role key). The secret is never exposed in browser bundles. Preview and local development remain local-only unless explicitly configured with their own server variables.
+
+NPC settings autosave with an 800ms delay and optimistic revision checks. A stale edit returns 409 rather than silently replacing another device's changes. The user can export local JSON before loading the cloud version; a local JSON backup is also kept under `farlands-before-cloud-load`. Refresh/synchronize to fetch changes from other devices; no realtime subscription is enabled. An empty cloud project automatically receives existing local NPCs and recordings after login. If an existing cloud project conflicts with unsynced local settings, the studio asks the user which version to load. Files and settings that fail to upload remain in the browser and can be retried via Synchronize.
+
+WAV files are stored privately and streamed through `/api/audio` only after studio authentication. Audio downloads are lazy, reducing transfer usage. Godot export downloads missing cloud audio before building its ZIP. New takes and favorites are synced. Deleting a take hides it through a tombstone; its file is retained in the private bucket for recovery and continues to use storage. There is no permanent-purge UI yet. The storage counter measures registered recording bytes including hidden takes; orphan uploads are not measured by this counter.
+
+Free tier currently includes 500 MB database and 1 GB file storage, subject to Supabase limits; free projects may pause after a week of low activity. No paid plan or billing was enabled. Keep exported backups: automatic database backups are not included in the Free plan.
