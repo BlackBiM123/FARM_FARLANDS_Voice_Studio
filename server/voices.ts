@@ -85,9 +85,17 @@ export async function handleVoices(request: Request): Promise<Response> {
     });
     if (!upstream.ok) {
       const data = (await upstream.json().catch(() => ({}))) as {
-        error?: { status?: string };
+        error?: { status?: string; message?: string };
       };
       const status = upstream.status;
+      const diagnostic =
+        status === 400 && typeof data.error?.message === "string"
+          ? data.error.message
+              .split(process.env.GEMINI_API_KEY!)
+              .join("[скрыто]")
+              .replace(/AIza[A-Za-z0-9_-]+/g, "[скрыто]")
+              .slice(0, 500)
+          : "";
       return json(
         {
           error:
@@ -98,7 +106,8 @@ export async function handleVoices(request: Request): Promise<Response> {
                 : status === 403
                   ? "Gemini не разрешает Voice Design для этого проекта или региона."
                   : status === 400
-                    ? "Gemini отклонил описание голоса или параметры создания."
+                    ? "Gemini отклонил описание голоса или параметры создания. " +
+                      diagnostic
                     : "Gemini не смог выполнить запрос создания голоса.",
           providerStatus: status,
           providerCode:
