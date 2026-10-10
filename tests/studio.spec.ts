@@ -7,6 +7,10 @@ test("quota response shows local countdown and persists limits without external 
   await page
     .getByRole("button", { name: "Добавить персонажа", exact: true })
     .click();
+  await page.getByLabel("Имя", { exact: true }).fill("Тестовый персонаж");
+  await page
+    .getByRole("button", { name: "Сохранить и открыть студию", exact: true })
+    .click();
   await page.getByLabel("Текст реплики").fill("Тест");
   await page.route("**/api/tts", (r) =>
     r.fulfill({
@@ -113,6 +117,9 @@ test("casting, persistence, generation, comparison and Godot export", async ({
   await page.getByRole("button", { name: "Персонаж", exact: true }).click();
   await page.getByLabel("Имя", { exact: true }).fill("Тестовый NPC");
   await page.getByLabel("Роль", { exact: true }).fill("Тестовая роль");
+  await page
+    .getByRole("button", { name: "Сохранить и открыть студию", exact: true })
+    .click();
   await page.getByLabel("Голос Gemini").selectOption("Charon");
   await expect(
     page.getByLabel("Голос Gemini").locator("option:checked"),

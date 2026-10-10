@@ -147,3 +147,64 @@ vi.mock("./auth.js", async (importOriginal) => {
     ),
   };
 });
+it("preserves character profiles when an older voice-only client submits a project", async () => {
+  const legacy = {
+    id: "test-character",
+    name: "Old voice name",
+    role: "Farmer",
+    text: "Hello",
+    settings: {
+      voice: "Kore",
+      model: "gemini-3.8-flash-tts",
+      emotion: "Calm",
+      pace: 1,
+      direction: "",
+    },
+  };
+  const read = {
+    eq: vi.fn().mockReturnThis(),
+    single: vi
+      .fn()
+      .mockResolvedValue({
+        data: {
+          payload: {
+            version: 1,
+            npcs: [
+              {
+                ...legacy,
+                profile: { biography: "Keep this biography", age: 42 },
+              },
+            ],
+            gameCharacter: true,
+          },
+        },
+        error: null,
+      }),
+  };
+  const write = {
+    eq: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    maybeSingle: vi
+      .fn()
+      .mockResolvedValue({ data: { revision: 2 }, error: null }),
+  };
+  const update = vi.fn().mockReturnValue(write);
+  vi.mocked(createClient).mockReturnValue({
+    from: () => ({ select: () => read, update }),
+  } as unknown as ReturnType<typeof createClient>);
+  const r = await handleCloud(
+    request("/api/cloud", "PUT", {
+      project: {
+        version: 1,
+        npcs: [{ ...legacy, name: "Updated voice name" }],
+        gameCharacter: true,
+      },
+      revision: 1,
+    }),
+  );
+  expect(r.status).toBe(200);
+  const payload = update.mock.calls[0]![0].payload;
+  expect(payload.npcs[0].name).toBe("Updated voice name");
+  expect(payload.npcs[0].profile.biography).toBe("Keep this biography");
+  expect(payload.npcs[0].profile.age).toBe(42);
+});

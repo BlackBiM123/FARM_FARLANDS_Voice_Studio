@@ -22,6 +22,49 @@ import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
 import QuotaPanel from "./components/QuotaPanel.vue";
 import UserAdmin from "./components/UserAdmin.vue";
+import CharacterEditor from "./components/CharacterEditor.vue";
+import type { NPC } from "../shared/schema";
+const characterHash = ref(window.location.hash),
+  projectLoaded = ref(false);
+const characterMode = computed(() =>
+  characterHash.value === "#/characters/new"
+    ? "new"
+    : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
+      ? "edit"
+      : characterHash.value === "#/characters"
+        ? "catalog"
+        : "studio",
+);
+const editingCharacter = computed(() =>
+  npcs.value.find((n) => n.id === characterHash.value.split("/")[2]),
+);
+function readCharacterHash() {
+  characterHash.value = window.location.hash;
+}
+onMounted(() => window.addEventListener("hashchange", readCharacterHash));
+onUnmounted(() => window.removeEventListener("hashchange", readCharacterHash));
+function openCharacter(id: string) {
+  usersOpen.value = false;
+  window.location.hash = "/characters/" + id + "/edit";
+}
+function characterCatalog() {
+  window.location.hash = "/characters";
+  usersOpen.value = false;
+}
+function voicePage(view: "studio" | "casting") {
+  window.location.hash = "";
+  tab.value = view;
+}
+function saveCharacter(value: NPC, openStudio: boolean) {
+  const index = npcs.value.findIndex((n) => n.id === value.id);
+  if (index >= 0) npcs.value[index] = value;
+  else npcs.value.push(value);
+  selected.value = value.id;
+  edit.value = false;
+  notice.value = "Профиль персонажа сохранён в проекте";
+  if (openStudio) voicePage("studio");
+  else openCharacter(value.id);
+}
 const sessionChecking = ref(true),
   loginUsername = ref(""),
   loginError = ref(""),
@@ -264,12 +307,14 @@ async function login() {
     const data = await r.json();
     if (!r.ok) throw Error(data.error);
     authenticated.value = true;
+    projectLoaded.value = false;
     account.value = data.user;
     loginError.value = "";
     token.value = "";
     accessOpen.value = false;
     notice.value = "Вход сохранён на 30 дней в этом браузере";
     await syncCloud();
+    projectLoaded.value = true;
   } catch (e) {
     loginError.value = e instanceof Error ? e.message : "Ошибка входа";
   } finally {
@@ -330,12 +375,12 @@ watch(
   () => {
     try {
       saveProject(npcs.value, gameCharacter.value);
-      if (!applyingCloud) {
-        rememberDirty(true);
-        scheduleCloud();
-      }
     } catch {
-      notice.value = "Не удалось сохранить настройки. Экспортируйте JSON.";
+      notice.value = "Не удалось сохранить кеш браузера. Экспортируйте JSON.";
+    }
+    if (!applyingCloud) {
+      rememberDirty(true);
+      scheduleCloud();
     }
   },
   { deep: true },
@@ -361,6 +406,7 @@ onMounted(async () => {
     notice.value = "Хранилище аудио недоступно в этом браузере.";
   }
   if (authenticated.value) await syncCloud();
+  projectLoaded.value = true;
 });
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -392,7 +438,7 @@ async function importProject(e: Event) {
     file = input.files?.[0];
   if (!file) return;
   try {
-    if (file.size > 1000000) throw Error();
+    if (file.size > 3500000) throw Error();
     const data = projectSchema.parse(JSON.parse(await file.text()));
     npcs.value = data.npcs;
     gameCharacter.value = data.gameCharacter;
@@ -404,23 +450,8 @@ async function importProject(e: Event) {
   input.value = "";
 }
 function addNPC() {
-  const id = "npc_" + crypto.randomUUID().slice(0, 8);
-  npcs.value.push({
-    id,
-    name: "Новый персонаж",
-    role: "NPC",
-    text: "",
-    settings: {
-      voice: "Kore",
-      model: models[0],
-      emotion: "Спокойная",
-      pace: 1,
-      direction: "",
-    },
-  });
-  selected.value = id;
-  edit.value = true;
-  tab.value = "studio";
+  usersOpen.value = false;
+  window.location.hash = "/characters/new";
 }
 async function generate() {
   if ((quotaPanel.value?.cooldown ?? 0) > 0) {
@@ -615,10 +646,21 @@ function pauseOthers(e: Event) {
       </div>
     </header>
     <nav>
-      <button :class="{ chosen: tab === 'studio' }" @click="tab = 'studio'">
+      <button
+        :class="{ chosen: tab === 'studio' && characterMode === 'studio' }"
+        @click="voicePage('studio')"
+      >
         <AudioLines :size="16" /> Студия</button
-      ><button :class="{ chosen: tab === 'casting' }" @click="tab = 'casting'">
+      ><button
+        :class="{ chosen: tab === 'casting' && characterMode === 'studio' }"
+        @click="voicePage('casting')"
+      >
         Кастинг озвучки</button
+      ><button
+        :class="{ chosen: characterMode !== 'studio' }"
+        @click="characterCatalog"
+      >
+        Персонажи</button
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small
         >{{ npcs.length }} ПЕРСОНАЖЕЙ ·
@@ -677,7 +719,102 @@ function pauseOthers(e: Event) {
         <p>{{ gameStyleRule }}</p>
       </details>
     </section>
-    <section v-if="tab === 'casting'" class="casting">
+    <section v-if="characterMode === 'catalog'" class="character-catalog panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">НАСЕЛЕНИЕ РЕГИОНА</span>
+          <h2>Персонажи игры</h2>
+          <p class="hint">
+            Профили, семейные связи, истории и настройки голоса.
+          </p>
+        </div>
+        <button class="primary" @click="addNPC">
+          <Plus :size="16" />Создать персонажа
+        </button>
+      </div>
+      <label class="search"
+        ><Search :size="16" /><input
+          v-model="query"
+          placeholder="Найти персонажа"
+          aria-label="Поиск персонажей"
+      /></label>
+      <p v-if="!filtered.length" class="hint">
+        {{
+          npcs.length
+            ? "Персонажи не найдены"
+            : "В каталоге пока нет персонажей."
+        }}
+      </p>
+      <div class="character-cards">
+        <article v-for="n in filtered" :key="n.id" class="character-card">
+          <div class="character-card-heading">
+            <span class="portrait small-portrait">{{
+              n.name.slice(0, 1)
+            }}</span>
+            <div>
+              <h3>{{ n.name }}</h3>
+              <small>{{ n.role || "Роль не указана" }}</small>
+            </div>
+          </div>
+          <p>
+            {{ n.profile.settlement || n.profile.region || "Регион не указан" }}
+            ·
+            {{
+              n.profile.age === null
+                ? "Возраст не указан"
+                : n.profile.age + " лет"
+            }}
+          </p>
+          <p class="character-summary">
+            {{
+              n.profile.personality ||
+              n.profile.biography ||
+              "Описание ещё не заполнено"
+            }}
+          </p>
+          <small
+            >{{ n.profile.relationships.length }} связей ·
+            {{ n.settings.voice }}</small
+          >
+          <div class="character-card-actions">
+            <button @click="openCharacter(n.id)">Редактировать</button
+            ><button
+              @click="
+                selected = n.id;
+                voicePage('studio');
+              "
+            >
+              Открыть голос
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+    <CharacterEditor
+      v-else-if="
+        characterMode === 'new' ||
+        (characterMode === 'edit' && editingCharacter && projectLoaded)
+      "
+      :key="characterHash"
+      :character="characterMode === 'edit' ? editingCharacter : undefined"
+      :others="npcs"
+      @save="saveCharacter"
+      @cancel="characterCatalog"
+    />
+    <section
+      v-else-if="characterMode === 'edit'"
+      class="panel missing-character"
+    >
+      <p>
+        {{
+          projectLoaded
+            ? "Персонаж не найден в этом проекте."
+            : "Загрузка профиля персонажа…"
+        }}
+      </p>
+      <button @click="characterCatalog">Вернуться к персонажам</button>
+    </section>
+    <section v-else-if="tab === 'casting'" class="casting">
       <div class="section-heading">
         <span class="eyebrow">КАСТИНГ ОЗВУЧКИ</span
         ><button @click="addNPC"><Plus :size="15" /> Персонаж</button>
@@ -765,15 +902,11 @@ function pauseOthers(e: Event) {
             </div>
             <button
               class="icon ml-auto"
-              @click="edit = !edit"
+              @click="openCharacter(npc.id)"
               aria-label="Редактировать персонажа"
             >
               <Settings2 :size="17" />
             </button>
-          </div>
-          <div v-if="edit" class="fields">
-            <label>Имя<input v-model="npc.name" maxlength="80" /></label
-            ><label>Роль<input v-model="npc.role" maxlength="120" /></label>
           </div>
           <p class="character-direction">{{ npc.settings.direction }}</p>
         </section>
@@ -1008,7 +1141,11 @@ function pauseOthers(e: Event) {
         </p>
       </aside>
     </div>
-    <QuotaPanel ref="quotaPanel" :model="npc?.settings.model ?? models[0]" />
+    <QuotaPanel
+      v-show="characterMode === 'studio'"
+      ref="quotaPanel"
+      :model="npc?.settings.model ?? models[0]"
+    />
     <footer><span>FARM & FARLANDS</span><span>VOICE STUDIO</span></footer>
     <div v-if="notice" class="toast" role="status">
       {{ notice

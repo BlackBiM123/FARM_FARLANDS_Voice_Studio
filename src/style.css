@@ -1031,3 +1031,243 @@ footer {
     flex: auto;
   }
 }
+.character-page-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  margin: 10px 0 20px;
+}
+.character-page-heading h2 {
+  font-size: 26px;
+  margin: 8px 0;
+}
+.character-page-heading p {
+  font-size: 11px;
+  color: #a49783;
+}
+.character-save-actions,
+.character-bottom-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.character-save-actions button,
+.character-bottom-actions button {
+  font-size: 11px;
+}
+.character-basics {
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+.character-basics label {
+  margin-top: 0;
+}
+.character-basics small {
+  display: block;
+  font-size: 9px;
+  margin-top: 8px;
+  line-height: 1.7;
+}
+.character-page-body {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.character-section-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 6px;
+  position: sticky;
+  top: 18px;
+}
+.character-section-nav button {
+  justify-content: flex-start;
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  padding: 13px;
+}
+.character-section-nav button[aria-pressed="true"] {
+  background: #dfad501a;
+  color: #e9bf70;
+}
+.character-section {
+  padding: 24px;
+}
+.character-section h3 {
+  font-size: 18px;
+}
+.character-section h4 {
+  margin: 24px 0 10px;
+  font-size: 13px;
+  color: #d7c196;
+}
+.character-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 20px;
+}
+.character-fields .wide {
+  grid-column: 1/-1;
+}
+.subsection-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+}
+.subsection-heading button,
+.profile-row > button {
+  font-size: 10px;
+  padding: 7px 10px;
+}
+.mechanic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.mechanic-grid label,
+.profile-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.mechanic-grid input,
+.profile-check input {
+  accent-color: #dfad50;
+}
+.profile-row {
+  border: 1px solid #3e3a32;
+  border-radius: 6px;
+  padding: 15px 18px;
+  margin-top: 14px;
+  background: #14171b;
+}
+.profile-row > button {
+  margin-top: 16px;
+}
+.character-bottom-actions {
+  justify-content: flex-end;
+  margin: 20px 0 30px;
+}
+.character-error {
+  border: 1px solid #a9794a;
+  border-radius: 5px;
+  background: #563b2429;
+  color: #eec493;
+  padding: 14px;
+  font-size: 12px;
+}
+.open-voice {
+  margin-top: 18px;
+}
+.character-catalog {
+  padding: 24px;
+  margin-bottom: 22px;
+}
+.character-catalog h2 {
+  font-size: 24px;
+  margin: 8px 0;
+}
+.character-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.character-card {
+  background: #14181c;
+  border: 1px solid #3b3b36;
+  border-radius: 7px;
+  padding: 20px;
+}
+.character-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.character-card-heading h3 {
+  margin-bottom: 5px;
+}
+.character-card p {
+  font-size: 11px;
+  color: #a49c8d;
+  line-height: 1.8;
+}
+.character-summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 58px;
+}
+.character-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+.character-card-actions button {
+  font-size: 10px;
+  padding: 8px;
+}
+.missing-character {
+  padding: 35px;
+  margin: 20px 0;
+}
+.missing-character p {
+  font-size: 13px;
+}
+.character-catalog .search {
+  max-width: 420px;
+}
+@media (max-width: 1000px) {
+  .character-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .character-page-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .character-basics,
+  .character-page-body,
+  .character-fields,
+  .character-cards {
+    grid-template-columns: 1fr;
+  }
+  .character-fields .wide {
+    grid-column: auto;
+  }
+  .character-section-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .character-section-nav button {
+    padding: 9px;
+  }
+  .mechanic-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .character-section {
+    padding: 18px;
+  }
+  .character-catalog {
+    padding: 18px;
+  }
+  .subsection-heading {
+    align-items: flex-start;
+  }
+  .character-bottom-actions {
+    justify-content: flex-start;
+  }
+}

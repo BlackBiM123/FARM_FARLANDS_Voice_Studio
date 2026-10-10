@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
                     (route === "audio"
                       ? 4000000
                       : route === "cloud"
-                        ? 1000000
+                        ? 3500000
                         : 12000)
                   ) {
                     res.statusCode = 413;

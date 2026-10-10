@@ -106,6 +106,9 @@ test("cloud project and audio survive a clean browser and stale edits cannot ove
     .getByRole("button", { name: "Добавить персонажа", exact: true })
     .click();
   await page.getByLabel("Имя", { exact: true }).fill("Облачный NPC");
+  await page
+    .getByRole("button", { name: "Сохранить и открыть студию", exact: true })
+    .click();
   await page.getByLabel("Текст реплики").fill("Облачная реплика");
   await expect.poll(() => project.npcs[0]?.name).toBe("Облачный NPC");
   await page.getByRole("button", { name: "Создать дубль" }).click();
@@ -138,6 +141,10 @@ test("cloud project and audio survive a clean browser and stale edits cannot ove
   project.npcs[0]!.name = "Изменено на другом устройстве";
   await second.getByRole("button", { name: "Редактировать персонажа" }).click();
   await second.getByLabel("Имя", { exact: true }).fill("Локальные изменения");
+  await second
+    .getByRole("button", { name: "Сохранить персонажа", exact: true })
+    .first()
+    .click();
   await expect(second.locator(".cloud-status")).toContainText(
     "Проект изменился на другом устройстве",
   );
@@ -148,11 +155,8 @@ test("cloud project and audio survive a clean browser and stale edits cannot ove
   await second
     .getByRole("button", { name: "Загрузить облачную версию" })
     .click();
-  await expect(
-    second.getByRole("heading", {
-      name: "Изменено на другом устройстве",
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(second.getByLabel("Имя", { exact: true })).toHaveValue(
+    "Изменено на другом устройстве",
+  );
   await clean.close();
 });

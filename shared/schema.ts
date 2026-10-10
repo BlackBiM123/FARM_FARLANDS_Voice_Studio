@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { characterProfileSchema, emptyProfile } from "./character.js";
 export const voices = [
   "Sadachbia",
   "Algenib",
@@ -37,6 +38,7 @@ export const npcSchema = z.object({
   role: z.string().max(120),
   text: z.string().max(600),
   settings: settingsSchema,
+  profile: characterProfileSchema.default(emptyProfile),
 });
 export const projectSchema = z.object({
   version: z.literal(1),

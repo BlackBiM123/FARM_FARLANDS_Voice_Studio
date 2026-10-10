@@ -55,7 +55,7 @@ export async function handleCloud(request: Request) {
       });
     }
     const raw = await request.text();
-    if (raw.length > 1000000)
+    if (Buffer.byteLength(raw) > 3500000)
       return json({ error: "Запрос слишком большой" }, 413);
     let body: unknown;
     try {
@@ -71,6 +71,24 @@ export async function handleCloud(request: Request) {
         })
         .safeParse(body);
       if (!parsed.success) return json({ error: "Некорректный проект" }, 400);
+      const incoming = (
+        body as { project: { npcs: { id: string; profile?: unknown }[] } }
+      ).project.npcs;
+      if (incoming.some((n) => n.profile === undefined)) {
+        const previous = await db
+          .from("studio_projects")
+          .select("payload")
+          .eq("id", "main")
+          .single();
+        if (previous.error) throw Error("read");
+        const old = projectSchema.parse(previous.data.payload);
+        for (const n of parsed.data.project.npcs) {
+          if (incoming.find((i) => i.id === n.id)?.profile === undefined) {
+            const saved = old.npcs.find((i) => i.id === n.id);
+            if (saved) n.profile = saved.profile;
+          }
+        }
+      }
       const { data, error } = await db
         .from("studio_projects")
         .update({
