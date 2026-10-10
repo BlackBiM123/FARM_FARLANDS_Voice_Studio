@@ -31,6 +31,19 @@ test("family tree, portrait, kinship and persisted draft", async ({ page }) => {
   });
   await expect(page.locator(".photo-editor img")).toBeVisible();
   await page
+    .getByLabel("Изображение в полный рост", { exact: true })
+    .setInputFiles({
+      name: "full.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        (await page.locator(".photo-editor img").getAttribute("src"))!.split(
+          ",",
+        )[1]!,
+        "base64",
+      ),
+    });
+  await expect(page.locator(".full-image-editor img")).toBeVisible();
+  await page
     .getByRole("button", { name: "Сохранить персонажа", exact: true })
     .first()
     .click();

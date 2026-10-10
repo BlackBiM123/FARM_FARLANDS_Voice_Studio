@@ -41,8 +41,13 @@ export const npcSchema = z.object({
   settings: settingsSchema,
   photo: z
     .string()
-    .max(24000)
-    .regex(/^$|^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/)
+    .max(100000)
+    .regex(/^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
+    .optional(),
+  fullImage: z
+    .string()
+    .max(100000)
+    .regex(/^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
     .optional(),
   profile: characterProfileSchema.default(emptyProfile),
 });

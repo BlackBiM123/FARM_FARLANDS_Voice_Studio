@@ -77,6 +77,17 @@ async function uploadPhoto(event: Event) {
     return;
   }
   try {
+    if (file.size <= 70000) {
+      const reader = new FileReader();
+      const data = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      draft.value.photo = data;
+      error.value = "";
+      return;
+    }
     const bitmap = await createImageBitmap(file);
     const canvas = document.createElement("canvas");
     canvas.width = 160;
@@ -104,6 +115,33 @@ async function uploadPhoto(event: Event) {
     error.value = "";
   } catch {
     error.value = "Не удалось прочитать изображение. Попробуйте другой файл.";
+  }
+}
+async function uploadFullImage(event: Event) {
+  const input = event.target as HTMLInputElement,
+    file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  if (
+    !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+    file.size > 70000
+  ) {
+    error.value =
+      "Изображение в полный рост: JPG, PNG или WebP до 70 КБ. Исходный файл сохраняется без обрезки.";
+    return;
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    bitmap.close();
+    const reader = new FileReader();
+    draft.value.fullImage = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    error.value = "";
+  } catch {
+    error.value = "Не удалось прочитать изображение";
   }
 }
 function reloadForm() {
@@ -233,11 +271,36 @@ function link(index: number, e: Event) {
           accept="image/jpeg,image/png,image/webp"
           @change="uploadPhoto"
         /><small
-          >JPG, PNG или WebP до 10 МБ. Портрет обрезается по центру.</small
+          >JPG, PNG или WebP до 10 МБ. Файлы до 70 КБ сохраняются как есть;
+          более крупные обрезаются до портрета.</small
         ></label
       >
       <button v-if="draft.photo" type="button" @click="draft.photo = ''">
         Удалить фото
+      </button>
+    </section>
+    <section class="panel photo-editor full-image-editor">
+      <img
+        v-if="draft.fullImage"
+        :src="draft.fullImage"
+        :alt="(draft.name || 'Персонаж') + ' — в полный рост'"
+      />
+      <label
+        >Изображение в полный рост<input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          aria-label="Изображение в полный рост"
+          @change="uploadFullImage"
+        /><small
+          >До 70 КБ. Сохраняется без обрезки, с исходной прозрачностью.</small
+        ></label
+      >
+      <button
+        v-if="draft.fullImage"
+        type="button"
+        @click="draft.fullImage = ''"
+      >
+        Удалить изображение в полный рост
       </button>
     </section>
     <section

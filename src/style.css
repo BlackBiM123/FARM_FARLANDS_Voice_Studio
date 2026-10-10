@@ -1407,3 +1407,15 @@ footer {
 .family-page .panel {
   padding: 20px;
 }
+.full-image-editor > img {
+  width: auto;
+  height: 220px;
+  max-width: 220px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.tree-person img,
+.portrait img,
+.photo-editor > img {
+  image-rendering: pixelated;
+}
