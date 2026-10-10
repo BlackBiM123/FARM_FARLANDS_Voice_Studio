@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { handleTTS } from "./server/tts.js";
 import { handleSession } from "./server/session.js";
 import { handleCloud } from "./server/cloud.js";
+import { handleImage } from "./server/image.js";
 import { handleAudio } from "./server/audio.js";
 import { handleUsers } from "./server/users.js";
 
@@ -26,7 +27,14 @@ export default defineConfig(({ mode }) => {
       {
         name: "local-api",
         configureServer(server) {
-          for (const route of ["tts", "session", "cloud", "audio", "users"])
+          for (const route of [
+            "tts",
+            "session",
+            "cloud",
+            "audio",
+            "users",
+            "image",
+          ])
             server.middlewares.use("/api/" + route, async (req, res) => {
               try {
                 const chunks: Buffer[] = [];
@@ -35,7 +43,7 @@ export default defineConfig(({ mode }) => {
                   size += chunk.length;
                   if (
                     size >
-                    (route === "audio"
+                    (route === "audio" || route === "image"
                       ? 4000000
                       : route === "cloud"
                         ? 3500000
@@ -72,6 +80,7 @@ export default defineConfig(({ mode }) => {
                   session: handleSession,
                   cloud: handleCloud,
                   audio: handleAudio,
+                  image: handleImage,
                   users: handleUsers,
                 }[route]!(request);
                 res.statusCode = response.status;

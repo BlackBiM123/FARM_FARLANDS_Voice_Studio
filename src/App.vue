@@ -587,7 +587,7 @@ async function exportGodot() {
       project: "FARM & FARLANDS",
       audio_format: "wav",
       game_character: gameCharacter.value,
-      npcs: npcs.value,
+      npcs: npcs.value.map((n) => ({ ...n })),
       families: families.value,
       takes: takes.value.map((t) => ({
         id: t.id,
@@ -601,6 +601,25 @@ async function exportGodot() {
         audio: `res://voice/audio/${t.npcId}_${t.id}.wav`,
       })),
     };
+    for (const n of manifest.npcs)
+      for (const key of ["photo", "fullImage"] as const) {
+        const src = n[key];
+        if (!src) continue;
+        const response = src.startsWith("/api/image?")
+          ? await authenticatedFetch(src)
+          : await fetch(src);
+        if (!response.ok) throw Error("image download");
+        const blob = await response.blob();
+        const ext =
+          blob.type === "image/png"
+            ? "png"
+            : blob.type === "image/webp"
+              ? "webp"
+              : "jpg";
+        const path = `voice/images/${n.id}_${key}.${ext}`;
+        zip.file(path, blob);
+        n[key] = "res://" + path;
+      }
     for (const t of takes.value)
       zip.file(`voice/audio/${t.npcId}_${t.id}.wav`, await downloadTake(t));
     zip.file("voice/manifest.json", JSON.stringify(manifest, null, 2));

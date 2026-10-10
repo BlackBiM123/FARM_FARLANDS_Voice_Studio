@@ -100,3 +100,5 @@ Character photos accept JPEG, PNG and WebP up to 10 MB. The browser crops the ce
 Small character image files (up to 70 KB, JPEG/PNG/WebP) now retain their original bytes and transparency in the project. A separate fullImage field stores an un-cropped full-body image. Larger portrait uploads still use the 160px crop. Both fields support up to 100 KB of data URL text and are preserved when older clients omit them.
 
 Original PNG/JPEG/WebP character images up to 350 KB are retained unchanged in photo/fullImage (500 KB data URL field cap). The 3.5 MB total project request cap still applies.
+
+Images larger than 350 KB now upload unchanged through the protected /api/image endpoint to the private studio-images bucket (created lazily by the server; max 3 MB per PNG/JPEG/WebP). Profiles hold same-origin authenticated references. Godot ZIP export includes all image files and replaces references with res:// paths. Small legacy inline portraits remain supported. Image deletion/orphan cleanup is not yet implemented.

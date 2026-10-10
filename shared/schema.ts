@@ -42,12 +42,16 @@ export const npcSchema = z.object({
   photo: z
     .string()
     .max(500000)
-    .regex(/^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
+    .regex(
+      /^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$|^\/api\/image\?id=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
     .optional(),
   fullImage: z
     .string()
     .max(500000)
-    .regex(/^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
+    .regex(
+      /^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$|^\/api\/image\?id=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
     .optional(),
   sourceText: z.string().max(50000).optional(),
   profile: characterProfileSchema.default(emptyProfile),

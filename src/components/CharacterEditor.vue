@@ -13,6 +13,7 @@ import {
   mechanicLabels,
   type CharacterField,
 } from "../character-fields";
+import { authenticatedFetch } from "../cloud-client";
 import { voiceInfo, genderLabel, emotionPresets } from "../voice-options";
 const props = defineProps<{
     character?: NPC;
@@ -64,85 +65,52 @@ watch(
     }
   },
 );
-async function uploadPhoto(event: Event) {
+const imageBusy = ref(false);
+async function uploadImage(event: Event, key: "photo" | "fullImage") {
   const input = event.target as HTMLInputElement,
     file = input.files?.[0];
   input.value = "";
   if (!file) return;
   if (
     !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
-    file.size > 10000000
+    file.size > 3000000
   ) {
-    error.value = "Выберите JPG, PNG или WebP размером до 10 МБ";
+    error.value = "Выберите JPG, PNG или WebP до 3 МБ";
     return;
   }
+  imageBusy.value = true;
   try {
+    const bitmap = await createImageBitmap(file);
+    bitmap.close();
     if (file.size <= 350000) {
       const reader = new FileReader();
-      const data = await new Promise<string>((resolve, reject) => {
+      draft.value[key] = await new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(String(reader.result));
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(file);
       });
-      draft.value.photo = data;
-      error.value = "";
-      return;
+    } else {
+      const response = await authenticatedFetch(
+        "/api/image?id=" + crypto.randomUUID(),
+        { method: "PUT", headers: { "Content-Type": file.type }, body: file },
+      );
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || "Ошибка загрузки");
+      draft.value[key] = data.url;
     }
-    const bitmap = await createImageBitmap(file);
-    const canvas = document.createElement("canvas");
-    canvas.width = 160;
-    canvas.height = 160;
-    const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#25272a";
-    ctx.fillRect(0, 0, 160, 160);
-    const side = Math.min(bitmap.width, bitmap.height);
-    ctx.drawImage(
-      bitmap,
-      (bitmap.width - side) / 2,
-      (bitmap.height - side) / 2,
-      side,
-      side,
-      0,
-      0,
-      160,
-      160,
-    );
-    bitmap.close();
-    let photo = canvas.toDataURL("image/jpeg", 0.8);
-    if (photo.length > 24000) photo = canvas.toDataURL("image/jpeg", 0.5);
-    if (photo.length > 24000) throw Error("size");
-    draft.value.photo = photo;
     error.value = "";
-  } catch {
-    error.value = "Не удалось прочитать изображение. Попробуйте другой файл.";
+  } catch (e) {
+    error.value =
+      e instanceof Error ? e.message : "Не удалось прочитать изображение";
+  } finally {
+    imageBusy.value = false;
   }
 }
-async function uploadFullImage(event: Event) {
-  const input = event.target as HTMLInputElement,
-    file = input.files?.[0];
-  input.value = "";
-  if (!file) return;
-  if (
-    !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
-    file.size > 350000
-  ) {
-    error.value =
-      "Изображение в полный рост: JPG, PNG или WebP до 350 КБ. Исходный файл сохраняется без обрезки.";
-    return;
-  }
-  try {
-    const bitmap = await createImageBitmap(file);
-    bitmap.close();
-    const reader = new FileReader();
-    draft.value.fullImage = await new Promise<string>((resolve, reject) => {
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-    error.value = "";
-  } catch {
-    error.value = "Не удалось прочитать изображение";
-  }
+function uploadPhoto(event: Event) {
+  void uploadImage(event, "photo");
+}
+function uploadFullImage(event: Event) {
+  void uploadImage(event, "fullImage");
 }
 function reloadForm() {
   if (props.character) {
@@ -165,6 +133,10 @@ function stat(key: keyof CharacterProfile["attributes"], event: Event) {
   draft.value.profile.attributes[key] = v === "" ? null : Number(v);
 }
 function save(openStudio = false) {
+  if (imageBusy.value) {
+    error.value = "Дождитесь загрузки изображения";
+    return;
+  }
   if (remoteChanged.value) {
     error.value = "Загрузите обновлённый профиль перед сохранением.";
     return;
@@ -256,6 +228,7 @@ function link(index: number, e: Event) {
         Загрузить обновлённую форму
       </button>
     </p>
+    <p v-if="imageBusy" role="status">Загрузка изображения…</p>
     <section class="panel photo-editor">
       <img
         v-if="draft.photo"
@@ -271,8 +244,7 @@ function link(index: number, e: Event) {
           accept="image/jpeg,image/png,image/webp"
           @change="uploadPhoto"
         /><small
-          >JPG, PNG или WebP до 10 МБ. Файлы до 350 КБ сохраняются как есть;
-          более крупные обрезаются до портрета.</small
+          >JPG, PNG или WebP до 3 МБ. Сохраняется исходное изображение.</small
         ></label
       >
       <button v-if="draft.photo" type="button" @click="draft.photo = ''">
@@ -292,7 +264,7 @@ function link(index: number, e: Event) {
           aria-label="Изображение в полный рост"
           @change="uploadFullImage"
         /><small
-          >До 350 КБ. Сохраняется без обрезки, с исходной прозрачностью.</small
+          >До 3 МБ. Сохраняется без обрезки, с исходной прозрачностью.</small
         ></label
       >
       <button
