@@ -13,7 +13,9 @@ function enter(event: PointerEvent) {
   const target = event.target;
   if (
     !(target instanceof HTMLImageElement) ||
-    !target.closest(".photo-editor,.portrait,.tree-person,.family-members")
+    !target.closest(
+      ".photo-editor,.portrait,.tree-person,.family-members,.line-speaker,.participant-picker,.interaction-people,.story-card-portraits",
+    )
   )
     return;
   const box = target.getBoundingClientRect(),

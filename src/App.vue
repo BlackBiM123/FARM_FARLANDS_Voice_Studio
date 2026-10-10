@@ -22,9 +22,22 @@ import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
 import VoiceDesigner from "./components/VoiceDesigner.vue";
 import type { DesignedVoice } from "../shared/designed-voice";
+import DialoguePage from "./components/DialoguePage.vue";
+import StoryPage from "./components/StoryPage.vue";
+import {
+  dialogueLineSchema,
+  type DialogueLine,
+  type DialogueGroup,
+  type Scenario,
+} from "../shared/content";
 import QuotaPanel from "./components/QuotaPanel.vue";
 import UserAdmin from "./components/UserAdmin.vue";
 import FamilyEditor from "./components/FamilyEditor.vue";
+import { loadContent } from "./storage";
+const content = loadContent();
+const dialogueGroups = ref<DialogueGroup[]>(content.dialogueGroups),
+  dialogueLines = ref<DialogueLine[]>(content.dialogueLines),
+  scenarios = ref<Scenario[]>(content.scenarios);
 import { loadFamilies } from "./storage";
 const families = ref(loadFamilies());
 import ImageHoverPreview from "./components/ImageHoverPreview.vue";
@@ -32,16 +45,25 @@ import CharacterEditor from "./components/CharacterEditor.vue";
 import type { NPC } from "../shared/schema";
 const characterHash = ref(window.location.hash),
   projectLoaded = ref(false);
+const initialDialogueNpc = computed(
+  () =>
+    new URLSearchParams(characterHash.value.split("?")[1] || "").get("npc") ||
+    undefined,
+);
 const characterMode = computed(() =>
-  characterHash.value.startsWith("#/families")
-    ? "families"
-    : characterHash.value === "#/characters/new"
-      ? "new"
-      : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
-        ? "edit"
-        : characterHash.value === "#/characters"
-          ? "catalog"
-          : "studio",
+  characterHash.value.startsWith("#/dialogue")
+    ? "dialogue"
+    : characterHash.value.startsWith("#/stories")
+      ? "stories"
+      : characterHash.value.startsWith("#/families")
+        ? "families"
+        : characterHash.value === "#/characters/new"
+          ? "new"
+          : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
+            ? "edit"
+            : characterHash.value === "#/characters"
+              ? "catalog"
+              : "studio",
 );
 const editingCharacter = computed(() =>
   npcs.value.find((n) => n.id === characterHash.value.split("/")[2]),
@@ -58,6 +80,41 @@ function openCharacter(id: string) {
 function windowFamilyPage() {
   usersOpen.value = false;
   window.location.hash = "/families";
+}
+function dialoguePage(id?: string) {
+  usersOpen.value = false;
+  window.location.hash = "/dialogue" + (id ? "/" + id : "");
+}
+function storyPage(id?: string) {
+  usersOpen.value = false;
+  window.location.hash = "/stories" + (id ? "/" + id : "");
+}
+function characterLines(id: string) {
+  usersOpen.value = false;
+  window.location.hash = "/dialogue?npc=" + encodeURIComponent(id);
+}
+function scenarioLine(scenarioId: string, npcId: string) {
+  if (dialogueLines.value.length >= 2000) {
+    notice.value = "Достигнут лимит реплик проекта";
+    return;
+  }
+  if (!dialogueGroups.value.length)
+    dialogueGroups.value = [{ id: crypto.randomUUID(), name: "Общие" }];
+  const id = crypto.randomUUID();
+  dialogueLines.value.push(
+    dialogueLineSchema.parse({
+      id,
+      key: "line_" + id.replaceAll("-", "").slice(0, 12),
+      npcId,
+      groupId: dialogueGroups.value[0]!.id,
+      scenarioId,
+      type:
+        scenarios.value.find((s) => s.id === scenarioId)?.kind === "conflict"
+          ? "conflict"
+          : "reaction",
+    }),
+  );
+  dialoguePage(scenarioId);
 }
 function characterCatalog() {
   window.location.hash = "/characters";
@@ -118,6 +175,9 @@ function snapshotProject() {
     npcs: npcs.value,
     gameCharacter: gameCharacter.value,
     families: families.value,
+    dialogueGroups: dialogueGroups.value,
+    dialogueLines: dialogueLines.value,
+    scenarios: scenarios.value,
   });
 }
 function rememberDirty(value: boolean) {
@@ -152,7 +212,7 @@ async function pushProject() {
     snapshot = snapshotProject();
   } catch {
     cloudMessage.value =
-      "Заполните имя и настройки персонажа для сохранения в облако";
+      "Проверьте названия, поля и связи проекта для сохранения в облако";
     return;
   }
   cloudWorking.value = true;
@@ -225,6 +285,9 @@ async function syncCloud(forceLoad = false) {
       npcs.value = data.project.npcs;
       gameCharacter.value = data.project.gameCharacter;
       families.value = data.project.families;
+      dialogueGroups.value = data.project.dialogueGroups;
+      dialogueLines.value = data.project.dialogueLines;
+      scenarios.value = data.project.scenarios;
       if (!npcs.value.some((n) => n.id === selected.value))
         selected.value = npcs.value[0]?.id ?? "";
       await nextTick();
@@ -402,10 +465,29 @@ const compared = computed(() =>
   takes.value.filter((t) => compare.value.includes(t.id)),
 );
 watch(
-  [npcs, gameCharacter, families],
+  [npcs, gameCharacter, families, dialogueGroups, dialogueLines, scenarios],
   () => {
+    if (
+      !projectSchema.safeParse({
+        version: 1,
+        npcs: npcs.value,
+        gameCharacter: gameCharacter.value,
+        families: families.value,
+        dialogueGroups: dialogueGroups.value,
+        dialogueLines: dialogueLines.value,
+        scenarios: scenarios.value,
+      }).success
+    ) {
+      cloudMessage.value =
+        "Заполните названия и проверьте поля проекта. Последняя корректная версия сохранена.";
+      return;
+    }
     try {
-      saveProject(npcs.value, gameCharacter.value, families.value);
+      saveProject(npcs.value, gameCharacter.value, families.value, {
+        dialogueGroups: dialogueGroups.value,
+        dialogueLines: dialogueLines.value,
+        scenarios: scenarios.value,
+      });
     } catch {
       notice.value = "Не удалось сохранить кеш браузера. Экспортируйте JSON.";
     }
@@ -457,6 +539,9 @@ function exportProject() {
             npcs: npcs.value,
             gameCharacter: gameCharacter.value,
             families: families.value,
+            dialogueGroups: dialogueGroups.value,
+            dialogueLines: dialogueLines.value,
+            scenarios: scenarios.value,
           },
           null,
           2,
@@ -479,6 +564,9 @@ async function importProject(e: Event) {
     npcs.value = data.npcs;
     gameCharacter.value = data.gameCharacter;
     families.value = data.families;
+    dialogueGroups.value = data.dialogueGroups;
+    dialogueLines.value = data.dialogueLines;
+    scenarios.value = data.scenarios;
     selected.value = data.npcs[0]?.id ?? "";
     notice.value = "Проект импортирован";
   } catch {
@@ -567,7 +655,137 @@ async function generate() {
     busy.value = false;
   }
 }
+async function persistLineTake(t: Take, lineId: string) {
+  await takesDB("put", t);
+  takes.value.push(t);
+  urls.value[t.id] = URL.createObjectURL(t.blob);
+  let remote = false;
+  if (cloudReady.value)
+    try {
+      await uploadTake(t);
+      t.remote = true;
+      await takesDB("put", t);
+      cloudBytes.value += t.blob.size;
+      remote = true;
+    } catch (e) {
+      cloudMessage.value =
+        e instanceof Error ? e.message : "Ошибка сохранения аудио";
+    }
+  const line = dialogueLines.value.find((l) => l.id === lineId);
+  if (line && line.npcId === t.npcId) line[t.language].takeId = t.id;
+  notice.value = remote
+    ? "Озвучка сохранена в облаке и привязана к реплике"
+    : "Аудио сохранено в браузере. Синхронизируйте проект для загрузки в облако.";
+}
+function lineSnapshot(lineId: string, lang: "ru" | "en") {
+  const l = dialogueLines.value.find((l) => l.id === lineId),
+    n = npcs.value.find((n) => n.id === l?.npcId);
+  if (!l || !n) throw Error("Персонаж или реплика не найдены");
+  return {
+    npcId: n.id,
+    text: l[lang].text,
+    language: lang,
+    gameCharacter: gameCharacter.value,
+    settings: {
+      ...JSON.parse(JSON.stringify(n.settings)),
+      emotion: l.emotion || n.settings.emotion,
+      direction: [
+        n.settings.direction,
+        l.direction,
+        l.context ? "Scene context: " + l.context : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+        .slice(0, 1000),
+    },
+  };
+}
+async function generateLine(lineId: string, lang: "ru" | "en") {
+  if (busy.value) return;
+  if ((quotaPanel.value?.cooldown ?? 0) > 0) {
+    notice.value = "Дождитесь окончания ожидания в панели лимитов";
+    return;
+  }
+  busy.value = true;
+  notice.value = "Генерирую " + lang.toUpperCase() + "…";
+  try {
+    const s = lineSnapshot(lineId, lang);
+    if (!s.text.trim()) throw Error("Сначала напишите реплику");
+    const r = await authenticatedFetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...s.settings,
+        text: s.text,
+        language: lang,
+        gameCharacter: s.gameCharacter,
+      }),
+    });
+    if (!r.ok) {
+      const data = await r.json();
+      if (r.status === 429)
+        quotaPanel.value?.failure(s.settings.model, data.error, data.quota);
+      throw Error(data.error || "Ошибка генерации");
+    }
+    quotaPanel.value?.success(s.settings.model);
+    await persistLineTake(
+      {
+        ...s,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        favorite: false,
+        blob: await r.blob(),
+      },
+      lineId,
+    );
+  } catch (e) {
+    notice.value =
+      e instanceof Error ? e.message : "Не удалось озвучить реплику";
+  } finally {
+    busy.value = false;
+  }
+}
+async function uploadLineAudio(lineId: string, lang: "ru" | "en", file: File) {
+  if (busy.value) return;
+  busy.value = true;
+  notice.value = "Проверяю WAV…";
+  try {
+    if (file.size > 4000000 || file.size < 44)
+      throw Error("Загрузите WAV до 4 МБ");
+    const bytes = await file.arrayBuffer(),
+      view = new Uint8Array(bytes);
+    if (
+      String.fromCharCode(...view.slice(0, 4)) !== "RIFF" ||
+      String.fromCharCode(...view.slice(8, 12)) !== "WAVE"
+    )
+      throw Error("Файл должен быть в формате WAV");
+    const s = lineSnapshot(lineId, lang);
+    await persistLineTake(
+      {
+        ...s,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        favorite: false,
+        blob: new Blob([bytes], { type: "audio/wav" }),
+      },
+      lineId,
+    );
+  } catch (e) {
+    notice.value = e instanceof Error ? e.message : "Не удалось загрузить WAV";
+  } finally {
+    busy.value = false;
+  }
+}
 async function removeTake(t: Take) {
+  if (
+    dialogueLines.value.some(
+      (l) => l.ru.takeId === t.id || l.en.takeId === t.id,
+    )
+  ) {
+    notice.value =
+      "Дубль используется в репликах. Сначала отвяжите его в таблице.";
+    return;
+  }
   try {
     if (t.remote) await cloudRequest("/api/cloud", "DELETE", { id: t.id });
     await takesDB("delete", undefined, t.id);
@@ -608,6 +826,29 @@ async function exportGodot() {
       game_character: gameCharacter.value,
       npcs: npcs.value.map((n) => ({ ...n })),
       families: families.value,
+      scenarios: scenarios.value,
+      dialogue_groups: dialogueGroups.value,
+      dialogue_lines: dialogueLines.value.map((l) => ({
+        ...l,
+        ...Object.fromEntries(
+          (["ru", "en"] as const).map((lang) => {
+            const t = takes.value.find((t) => t.id === l[lang].takeId);
+            return [
+              lang,
+              {
+                ...l[lang],
+                audio: t ? `res://voice/audio/${t.npcId}_${t.id}.wav` : null,
+                audio_text: t?.text ?? null,
+                needs_rerecord:
+                  !!t &&
+                  (t.text !== l[lang].text ||
+                    t.npcId !== l.npcId ||
+                    t.language !== lang),
+              },
+            ];
+          }),
+        ),
+      })),
       takes: takes.value.map((t) => ({
         id: t.id,
         npc_id: t.npcId,
@@ -644,7 +885,7 @@ async function exportGodot() {
     zip.file("voice/manifest.json", JSON.stringify(manifest, null, 2));
     zip.file(
       "voice/README.txt",
-      "Copy voice/ into your Godot project. Read manifest.json with JSON.parse_string; load the audio path with load(). Audio is 24 kHz mono WAV.",
+      "Copy voice/ into your Godot project. Read manifest.json with JSON.parse_string; load the audio path with load(). Generated audio is 24 kHz mono WAV; uploaded WAV files retain their original format. dialogue_lines contains RU/EN text, selected take IDs, audio resource paths and needs_rerecord flags. dialogue_groups and scenarios describe author-defined organization and events; conditions and consequences are not executable simulation code.",
     );
     download(await zip.generateAsync({ type: "blob" }), "farlands-godot.zip");
     notice.value = "Пакет Godot экспортирован";
@@ -720,6 +961,16 @@ function pauseOthers(e: Event) {
       >
         Персонажи</button
       ><button @click="windowFamilyPage">Семьи</button
+      ><button
+        :class="{ chosen: characterMode === 'dialogue' }"
+        @click="dialoguePage()"
+      >
+        Реплики</button
+      ><button
+        :class="{ chosen: characterMode === 'stories' }"
+        @click="storyPage()"
+      >
+        События и конфликты</button
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small
         >{{ npcs.length }} ПЕРСОНАЖЕЙ ·
@@ -856,6 +1107,39 @@ function pauseOthers(e: Event) {
         </article>
       </div>
     </section>
+    <DialoguePage
+      v-else-if="characterMode === 'dialogue' && projectLoaded"
+      v-model="dialogueLines"
+      v-model:groups="dialogueGroups"
+      :npcs="npcs"
+      :takes="takes"
+      :urls="urls"
+      :scenarios="scenarios"
+      :initial-scenario="characterHash.split('/')[2]"
+      :initial-npc="initialDialogueNpc"
+      :busy="busy"
+      @generate="generateLine"
+      @upload="uploadLineAudio"
+      @download="downloadAudio"
+      @open-character="openCharacter"
+      @open-scenario="storyPage"
+    />
+    <StoryPage
+      v-else-if="characterMode === 'stories' && projectLoaded"
+      v-model="scenarios"
+      :npcs="npcs"
+      :lines="dialogueLines"
+      :initial-id="characterHash.split('/')[2]"
+      @open-character="openCharacter"
+      @open-lines="dialoguePage"
+      @add-line="scenarioLine"
+    />
+    <section
+      v-else-if="['dialogue', 'stories'].includes(characterMode)"
+      class="panel content-empty"
+    >
+      Загрузка проекта…
+    </section>
     <FamilyEditor
       :key="characterHash"
       v-else-if="characterMode === 'families' && projectLoaded"
@@ -872,6 +1156,7 @@ function pauseOthers(e: Event) {
       :character="characterMode === 'edit' ? editingCharacter : undefined"
       :others="npcs"
       :families="families"
+      @open-lines="characterLines"
       @save="saveCharacter"
       @cancel="characterCatalog"
     />
@@ -1227,7 +1512,7 @@ function pauseOthers(e: Event) {
       </aside>
     </div>
     <QuotaPanel
-      v-show="characterMode === 'studio'"
+      v-show="characterMode === 'studio' || characterMode === 'dialogue'"
       ref="quotaPanel"
       :model="npc?.settings.model ?? models[0]"
     />

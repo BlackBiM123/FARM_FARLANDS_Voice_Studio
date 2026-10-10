@@ -67,7 +67,15 @@ it("rejects stale revisions instead of overwriting a newer cloud project", async
   } as unknown as ReturnType<typeof createClient>);
   const r = await handleCloud(
     request("/api/cloud", "PUT", {
-      project: { version: 1, npcs: [], gameCharacter: true, families: [] },
+      project: {
+        version: 1,
+        npcs: [],
+        gameCharacter: true,
+        families: [],
+        dialogueGroups: [],
+        dialogueLines: [],
+        scenarios: [],
+      },
       revision: 4,
     }),
   );
@@ -148,6 +156,30 @@ vi.mock("./auth.js", async (importOriginal) => {
   };
 });
 it("preserves character profiles when an older voice-only client submits a project", async () => {
+  const group = "33a1765e-741f-43c7-bf15-b1b47e564047",
+    scenario = "44a1765e-741f-43c7-bf15-b1b47e564047";
+  const oldContent = {
+    dialogueGroups: [{ id: group, name: "Keep dialogue group" }],
+    scenarios: [
+      {
+        id: scenario,
+        title: "Keep scenario",
+        kind: "conflict",
+        initiatorId: "test-character",
+      },
+    ],
+    dialogueLines: [
+      {
+        id: "55a1765e-741f-43c7-bf15-b1b47e564047",
+        key: "keep_line",
+        npcId: "test-character",
+        groupId: group,
+        scenarioId: scenario,
+        ru: { text: "Keep Russian text" },
+        en: { text: "Keep English text" },
+      },
+    ],
+  };
   const legacy = {
     id: "test-character",
     name: "Old voice name",
@@ -167,6 +199,7 @@ it("preserves character profiles when an older voice-only client submits a proje
       data: {
         payload: {
           version: 1,
+          ...oldContent,
           npcs: [
             {
               ...legacy,
@@ -218,4 +251,64 @@ it("preserves character profiles when an older voice-only client submits a proje
   expect(payload.npcs[0].profile.age).toBe(42);
   expect(payload.npcs[0].photo).toBe("data:image/jpeg;base64,YQ==");
   expect(payload.families[0].name).toBe("Keep family");
+  expect(payload.dialogueGroups[0].name).toBe("Keep dialogue group");
+  expect(payload.dialogueLines[0].en.text).toBe("Keep English text");
+  expect(payload.dialogueLines[0].scenarioId).toBe(scenario);
+  expect(payload.scenarios[0].title).toBe("Keep scenario");
+});
+it("cannot delete an audio take referenced by a dialogue line", async () => {
+  const id = "66a1765e-741f-43c7-bf15-b1b47e564047",
+    group = "33a1765e-741f-43c7-bf15-b1b47e564047";
+  const update = vi.fn();
+  const takeQuery = {
+    eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
+    maybeSingle: async () => ({ error: null, data: { metadata: { id } } }),
+  };
+  const projectQuery = {
+    eq: vi.fn().mockReturnThis(),
+    single: async () => ({
+      error: null,
+      data: {
+        payload: {
+          version: 1,
+          npcs: [
+            {
+              id: "martin",
+              name: "Martin",
+              role: "",
+              text: "",
+              settings: {
+                voice: "Charon",
+                model: "gemini-3.8-flash-tts",
+                emotion: "",
+                pace: 1,
+                direction: "",
+              },
+            },
+          ],
+          dialogueGroups: [{ id: group, name: "Group" }],
+          dialogueLines: [
+            {
+              id: "55a1765e-741f-43c7-bf15-b1b47e564047",
+              key: "test_line",
+              npcId: "martin",
+              groupId: group,
+              ru: { text: "Hello", takeId: id },
+            },
+          ],
+        },
+      },
+    }),
+  };
+  vi.mocked(createClient).mockReturnValue({
+    from: (table: string) => ({
+      select: () => (table === "studio_projects" ? projectQuery : takeQuery),
+      update,
+    }),
+  } as unknown as ReturnType<typeof createClient>);
+  expect(
+    (await handleCloud(request("/api/cloud", "DELETE", { id }))).status,
+  ).toBe(409);
+  expect(update).not.toHaveBeenCalled();
 });

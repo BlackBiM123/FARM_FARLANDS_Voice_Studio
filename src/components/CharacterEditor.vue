@@ -24,6 +24,7 @@ const props = defineProps<{
   emit = defineEmits<{
     save: [character: NPC, openStudio: boolean];
     cancel: [];
+    openLines: [id: string];
   }>();
 const draft = ref<NPC>(
   props.character
@@ -543,6 +544,13 @@ function link(index: number, e: Event) {
               }
             "
           />
+          <button
+            v-if="character"
+            type="button"
+            @click="emit('openLines', character.id)"
+          >
+            Реплики персонажа →
+          </button>
           <h4>Пресеты эмоций</h4>
           <div class="emotion-presets">
             <button

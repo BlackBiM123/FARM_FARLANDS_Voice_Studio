@@ -84,9 +84,29 @@ export function saveProject(
   npcs: NPC[],
   gameCharacter = true,
   families: import("../shared/family").Family[] = [],
+  content: Pick<
+    import("zod").infer<typeof projectSchema>,
+    "dialogueGroups" | "dialogueLines" | "scenarios"
+  > = { dialogueGroups: [], dialogueLines: [], scenarios: [] },
 ) {
   localStorage.setItem(
     "farlands-empty-studio-project",
-    JSON.stringify({ version: 1, npcs, gameCharacter, families }),
+    JSON.stringify({ version: 1, npcs, gameCharacter, families, ...content }),
   );
+}
+export function loadContent() {
+  try {
+    const p = projectSchema.parse(
+      JSON.parse(
+        localStorage.getItem("farlands-empty-studio-project") || "null",
+      ),
+    );
+    return {
+      dialogueGroups: p.dialogueGroups,
+      dialogueLines: p.dialogueLines,
+      scenarios: p.scenarios,
+    };
+  } catch {
+    return { dialogueGroups: [], dialogueLines: [], scenarios: [] };
+  }
 }

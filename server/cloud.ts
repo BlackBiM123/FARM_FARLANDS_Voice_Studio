@@ -70,7 +70,11 @@ export async function handleCloud(request: Request) {
           revision: z.number().int().nonnegative(),
         })
         .safeParse(body);
-      if (!parsed.success) return json({ error: "Некорректный проект" }, 400);
+      if (!parsed.success)
+        return json(
+          { error: parsed.error.issues[0]?.message || "Некорректный проект" },
+          400,
+        );
       const incoming = (
         body as {
           project: {
@@ -84,7 +88,14 @@ export async function handleCloud(request: Request) {
           };
         }
       ).project.npcs;
+      const rawProject = (body as { project: Record<string, unknown> }).project;
+      const missingContent = [
+        "dialogueGroups",
+        "dialogueLines",
+        "scenarios",
+      ].some((key) => rawProject[key] === undefined);
       if (
+        missingContent ||
         incoming.some(
           (n) =>
             n.profile === undefined ||
@@ -102,6 +113,42 @@ export async function handleCloud(request: Request) {
           .single();
         if (previous.error) throw Error("read");
         const old = projectSchema.parse(previous.data.payload);
+        const npcIds = new Set(parsed.data.project.npcs.map((n) => n.id));
+        if (rawProject.dialogueGroups === undefined)
+          parsed.data.project.dialogueGroups = old.dialogueGroups;
+        if (rawProject.scenarios === undefined)
+          parsed.data.project.scenarios = old.scenarios.map((s) => ({
+            ...s,
+            initiatorId:
+              s.initiatorId && npcIds.has(s.initiatorId) ? s.initiatorId : null,
+            targets: s.targets.filter((id) => npcIds.has(id)),
+            effects: s.effects.map((e) => ({
+              ...e,
+              fromId: e.fromId && npcIds.has(e.fromId) ? e.fromId : null,
+              toId: e.toId && npcIds.has(e.toId) ? e.toId : null,
+            })),
+          }));
+        if (rawProject.dialogueLines === undefined)
+          parsed.data.project.dialogueLines = old.dialogueLines
+            .filter(
+              (l) =>
+                npcIds.has(l.npcId) &&
+                parsed.data.project.dialogueGroups.some(
+                  (g) => g.id === l.groupId,
+                ),
+            )
+            .map((l) => ({
+              ...l,
+              recipientId:
+                l.recipientId && npcIds.has(l.recipientId)
+                  ? l.recipientId
+                  : null,
+              scenarioId:
+                l.scenarioId &&
+                parsed.data.project.scenarios.some((s) => s.id === l.scenarioId)
+                  ? l.scenarioId
+                  : null,
+            }));
         if (
           (body as { project: { families?: unknown } }).project.families ===
           undefined
@@ -133,6 +180,12 @@ export async function handleCloud(request: Request) {
           }
         }
       }
+      const merged = projectSchema.safeParse(parsed.data.project);
+      if (!merged.success)
+        return json(
+          { error: merged.error.issues[0]?.message || "Некорректный проект" },
+          400,
+        );
       const { data, error } = await db
         .from("studio_projects")
         .update({
@@ -200,6 +253,30 @@ export async function handleCloud(request: Request) {
       if (!existing.data) return json({ error: "Дубль не найден" }, 404);
       if (request.method === "PATCH" && parsed.data.favorite === undefined)
         return json({ error: "Укажите выбор дубля" }, 400);
+      if (request.method === "DELETE") {
+        const project = await db
+          .from("studio_projects")
+          .select("payload")
+          .eq("id", "main")
+          .single();
+        if (project.error) throw Error("read");
+        if (
+          projectSchema
+            .parse(project.data.payload)
+            .dialogueLines.some(
+              (l) =>
+                l.ru.takeId === parsed.data.id ||
+                l.en.takeId === parsed.data.id,
+            )
+        )
+          return json(
+            {
+              error:
+                "Дубль используется в репликах. Сначала отвяжите его в таблице.",
+            },
+            409,
+          );
+      }
       const update =
         request.method === "DELETE"
           ? { deleted_at: new Date().toISOString() }

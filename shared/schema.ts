@@ -2,6 +2,12 @@ import { z } from "zod";
 import { characterProfileSchema, emptyProfile } from "./character.js";
 import { familySchema, familyError } from "./family.js";
 import { customVoiceId, designedVoiceSchema } from "./designed-voice.js";
+import {
+  dialogueLineSchema,
+  dialogueGroupSchema,
+  scenarioSchema,
+  contentErrors,
+} from "./content.js";
 export const voices = [
   "Sadachbia",
   "Algenib",
@@ -63,12 +69,17 @@ export const projectSchema = z
     version: z.literal(1),
     npcs: z.array(npcSchema).max(100),
     gameCharacter: z.boolean().default(true),
+    dialogueGroups: z.array(dialogueGroupSchema).max(100).default([]),
+    dialogueLines: z.array(dialogueLineSchema).max(2000).default([]),
+    scenarios: z.array(scenarioSchema).max(500).default([]),
     families: z
       .array(familySchema)
       .max(100)
       .default(() => []),
   })
   .superRefine((p, ctx) => {
+    for (const message of contentErrors(p))
+      ctx.addIssue({ code: "custom", message });
     const ids = new Set(p.npcs.map((n) => n.id));
     const seen = new Set<string>();
     for (const f of p.families) {
