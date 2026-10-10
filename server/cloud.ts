@@ -72,9 +72,19 @@ export async function handleCloud(request: Request) {
         .safeParse(body);
       if (!parsed.success) return json({ error: "Некорректный проект" }, 400);
       const incoming = (
-        body as { project: { npcs: { id: string; profile?: unknown }[] } }
+        body as {
+          project: {
+            npcs: { id: string; profile?: unknown; photo?: unknown }[];
+          };
+        }
       ).project.npcs;
-      if (incoming.some((n) => n.profile === undefined)) {
+      if (
+        incoming.some(
+          (n) => n.profile === undefined || n.photo === undefined,
+        ) ||
+        (body as { project: { families?: unknown } }).project.families ===
+          undefined
+      ) {
         const previous = await db
           .from("studio_projects")
           .select("payload")
@@ -82,7 +92,27 @@ export async function handleCloud(request: Request) {
           .single();
         if (previous.error) throw Error("read");
         const old = projectSchema.parse(previous.data.payload);
+        if (
+          (body as { project: { families?: unknown } }).project.families ===
+          undefined
+        )
+          parsed.data.project.families = old.families.map((f) => ({
+            ...f,
+            members: f.members.filter((id) =>
+              parsed.data.project.npcs.some((n) => n.id === id),
+            ),
+            links: f.links.filter(
+              (l) =>
+                parsed.data.project.npcs.some((n) => n.id === l.from) &&
+                parsed.data.project.npcs.some((n) => n.id === l.to),
+            ),
+          }));
         for (const n of parsed.data.project.npcs) {
+          if (
+            (incoming.find((i) => i.id === n.id) as { photo?: unknown })
+              ?.photo === undefined
+          )
+            n.photo = old.npcs.find((i) => i.id === n.id)?.photo;
           if (incoming.find((i) => i.id === n.id)?.profile === undefined) {
             const saved = old.npcs.find((i) => i.id === n.id);
             if (saved) n.profile = saved.profile;

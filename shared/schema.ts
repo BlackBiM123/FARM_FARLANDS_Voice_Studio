@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { characterProfileSchema, emptyProfile } from "./character.js";
+import { familySchema, familyError } from "./family.js";
 export const voices = [
   "Sadachbia",
   "Algenib",
@@ -38,13 +39,38 @@ export const npcSchema = z.object({
   role: z.string().max(120),
   text: z.string().max(600),
   settings: settingsSchema,
+  photo: z
+    .string()
+    .max(24000)
+    .regex(/^$|^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/)
+    .optional(),
   profile: characterProfileSchema.default(emptyProfile),
 });
-export const projectSchema = z.object({
-  version: z.literal(1),
-  npcs: z.array(npcSchema).max(100),
-  gameCharacter: z.boolean().default(true),
-});
+export const projectSchema = z
+  .object({
+    version: z.literal(1),
+    npcs: z.array(npcSchema).max(100),
+    gameCharacter: z.boolean().default(true),
+    families: z
+      .array(familySchema)
+      .max(100)
+      .default(() => []),
+  })
+  .superRefine((p, ctx) => {
+    const ids = new Set(p.npcs.map((n) => n.id));
+    const seen = new Set<string>();
+    for (const f of p.families) {
+      const error =
+        familyError(f) ||
+        (f.members.some((id) => !ids.has(id))
+          ? "Участник семьи не найден"
+          : "") ||
+        (seen.has(f.id) ? "Повтор ID семьи" : "");
+      seen.add(f.id);
+      if (error)
+        ctx.addIssue({ code: "custom", message: error, path: ["families"] });
+    }
+  });
 export type NPC = z.infer<typeof npcSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
 export const takeMetadataSchema = z.object({

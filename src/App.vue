@@ -22,18 +22,23 @@ import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
 import QuotaPanel from "./components/QuotaPanel.vue";
 import UserAdmin from "./components/UserAdmin.vue";
+import FamilyEditor from "./components/FamilyEditor.vue";
+import { loadFamilies } from "./storage";
+const families = ref(loadFamilies());
 import CharacterEditor from "./components/CharacterEditor.vue";
 import type { NPC } from "../shared/schema";
 const characterHash = ref(window.location.hash),
   projectLoaded = ref(false);
 const characterMode = computed(() =>
-  characterHash.value === "#/characters/new"
-    ? "new"
-    : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
-      ? "edit"
-      : characterHash.value === "#/characters"
-        ? "catalog"
-        : "studio",
+  characterHash.value.startsWith("#/families")
+    ? "families"
+    : characterHash.value === "#/characters/new"
+      ? "new"
+      : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
+        ? "edit"
+        : characterHash.value === "#/characters"
+          ? "catalog"
+          : "studio",
 );
 const editingCharacter = computed(() =>
   npcs.value.find((n) => n.id === characterHash.value.split("/")[2]),
@@ -46,6 +51,10 @@ onUnmounted(() => window.removeEventListener("hashchange", readCharacterHash));
 function openCharacter(id: string) {
   usersOpen.value = false;
   window.location.hash = "/characters/" + id + "/edit";
+}
+function windowFamilyPage() {
+  usersOpen.value = false;
+  window.location.hash = "/families";
 }
 function characterCatalog() {
   window.location.hash = "/characters";
@@ -105,6 +114,7 @@ function snapshotProject() {
     version: 1,
     npcs: npcs.value,
     gameCharacter: gameCharacter.value,
+    families: families.value,
   });
 }
 function rememberDirty(value: boolean) {
@@ -211,6 +221,7 @@ async function syncCloud(forceLoad = false) {
         } catch {}
       npcs.value = data.project.npcs;
       gameCharacter.value = data.project.gameCharacter;
+      families.value = data.project.families;
       if (!npcs.value.some((n) => n.id === selected.value))
         selected.value = npcs.value[0]?.id ?? "";
       await nextTick();
@@ -371,10 +382,10 @@ const compared = computed(() =>
   takes.value.filter((t) => compare.value.includes(t.id)),
 );
 watch(
-  [npcs, gameCharacter],
+  [npcs, gameCharacter, families],
   () => {
     try {
-      saveProject(npcs.value, gameCharacter.value);
+      saveProject(npcs.value, gameCharacter.value, families.value);
     } catch {
       notice.value = "Не удалось сохранить кеш браузера. Экспортируйте JSON.";
     }
@@ -421,7 +432,12 @@ function exportProject() {
     new Blob(
       [
         JSON.stringify(
-          { version: 1, npcs: npcs.value, gameCharacter: gameCharacter.value },
+          {
+            version: 1,
+            npcs: npcs.value,
+            gameCharacter: gameCharacter.value,
+            families: families.value,
+          },
           null,
           2,
         ),
@@ -442,6 +458,7 @@ async function importProject(e: Event) {
     const data = projectSchema.parse(JSON.parse(await file.text()));
     npcs.value = data.npcs;
     gameCharacter.value = data.gameCharacter;
+    families.value = data.families;
     selected.value = data.npcs[0]?.id ?? "";
     notice.value = "Проект импортирован";
   } catch {
@@ -570,6 +587,7 @@ async function exportGodot() {
       audio_format: "wav",
       game_character: gameCharacter.value,
       npcs: npcs.value,
+      families: families.value,
       takes: takes.value.map((t) => ({
         id: t.id,
         npc_id: t.npcId,
@@ -657,10 +675,11 @@ function pauseOthers(e: Event) {
       >
         Кастинг озвучки</button
       ><button
-        :class="{ chosen: characterMode !== 'studio' }"
+        :class="{ chosen: ['catalog', 'new', 'edit'].includes(characterMode) }"
         @click="characterCatalog"
       >
         Персонажи</button
+      ><button @click="windowFamilyPage">Семьи</button
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small
         >{{ npcs.length }} ПЕРСОНАЖЕЙ ·
@@ -748,9 +767,12 @@ function pauseOthers(e: Event) {
       <div class="character-cards">
         <article v-for="n in filtered" :key="n.id" class="character-card">
           <div class="character-card-heading">
-            <span class="portrait small-portrait">{{
-              n.name.slice(0, 1)
-            }}</span>
+            <span class="portrait small-portrait"
+              ><img v-if="n.photo" :src="n.photo" :alt="n.name" /><template
+                v-else
+                >{{ n.name.slice(0, 1) }}</template
+              ></span
+            >
             <div>
               <h3>{{ n.name }}</h3>
               <small>{{ n.role || "Роль не указана" }}</small>
@@ -790,6 +812,13 @@ function pauseOthers(e: Event) {
         </article>
       </div>
     </section>
+    <FamilyEditor
+      :key="characterHash"
+      v-else-if="characterMode === 'families' && projectLoaded"
+      v-model="families"
+      :npcs="npcs"
+      @open-character="openCharacter"
+    />
     <CharacterEditor
       v-else-if="
         characterMode === 'new' ||
@@ -798,6 +827,7 @@ function pauseOthers(e: Event) {
       :key="characterHash"
       :character="characterMode === 'edit' ? editingCharacter : undefined"
       :others="npcs"
+      :families="families"
       @save="saveCharacter"
       @cancel="characterCatalog"
     />
@@ -836,9 +866,11 @@ function pauseOthers(e: Event) {
         "
       >
         <span class="cast-name"
-          ><span class="portrait small-portrait">{{
-            String(i + 1).padStart(2, "0")
-          }}</span
+          ><span class="portrait small-portrait"
+            ><img v-if="n.photo" :src="n.photo" :alt="n.name" /><template
+              v-else
+              >{{ String(i + 1).padStart(2, "0") }}</template
+            ></span
           ><span
             ><strong>{{ n.name }}</strong
             ><small>{{ n.role }}</small></span
@@ -875,9 +907,11 @@ function pauseOthers(e: Event) {
             edit = false;
           "
         >
-          <span class="portrait small-portrait">{{
-            String(i + 1).padStart(2, "0")
-          }}</span
+          <span class="portrait small-portrait"
+            ><img v-if="n.photo" :src="n.photo" :alt="n.name" /><template
+              v-else
+              >{{ String(i + 1).padStart(2, "0") }}</template
+            ></span
           ><span
             ><strong>{{ n.name }}</strong
             ><small>{{ n.role }}</small></span

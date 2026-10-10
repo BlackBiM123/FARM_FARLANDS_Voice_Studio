@@ -14,7 +14,11 @@ import {
   type CharacterField,
 } from "../character-fields";
 import { voiceInfo, genderLabel, emotionPresets } from "../voice-options";
-const props = defineProps<{ character?: NPC; others: NPC[] }>(),
+const props = defineProps<{
+    character?: NPC;
+    others: NPC[];
+    families?: import("../../shared/family").Family[];
+  }>(),
   emit = defineEmits<{
     save: [character: NPC, openStudio: boolean];
     cancel: [];
@@ -60,6 +64,48 @@ watch(
     }
   },
 );
+async function uploadPhoto(event: Event) {
+  const input = event.target as HTMLInputElement,
+    file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  if (
+    !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+    file.size > 10000000
+  ) {
+    error.value = "Выберите JPG, PNG или WebP размером до 10 МБ";
+    return;
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = 160;
+    canvas.height = 160;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#25272a";
+    ctx.fillRect(0, 0, 160, 160);
+    const side = Math.min(bitmap.width, bitmap.height);
+    ctx.drawImage(
+      bitmap,
+      (bitmap.width - side) / 2,
+      (bitmap.height - side) / 2,
+      side,
+      side,
+      0,
+      0,
+      160,
+      160,
+    );
+    bitmap.close();
+    let photo = canvas.toDataURL("image/jpeg", 0.8);
+    if (photo.length > 24000) photo = canvas.toDataURL("image/jpeg", 0.5);
+    if (photo.length > 24000) throw Error("size");
+    draft.value.photo = photo;
+    error.value = "";
+  } catch {
+    error.value = "Не удалось прочитать изображение. Попробуйте другой файл.";
+  }
+}
 function reloadForm() {
   if (props.character) {
     draft.value = JSON.parse(JSON.stringify(props.character));
@@ -172,6 +218,40 @@ function link(index: number, e: Event) {
         Загрузить обновлённую форму
       </button>
     </p>
+    <section class="panel photo-editor">
+      <img
+        v-if="draft.photo"
+        :src="draft.photo"
+        :alt="draft.name || 'Фото персонажа'"
+      />
+      <span v-else class="tree-initial">{{
+        draft.name.slice(0, 1) || "?"
+      }}</span>
+      <label
+        >Фото персонажа<input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          @change="uploadPhoto"
+        /><small
+          >JPG, PNG или WebP до 10 МБ. Портрет обрезается по центру.</small
+        ></label
+      >
+      <button v-if="draft.photo" type="button" @click="draft.photo = ''">
+        Удалить фото
+      </button>
+    </section>
+    <section
+      v-if="families?.some((f) => f.members.includes(draft.id))"
+      class="panel"
+    >
+      <h3>Семья</h3>
+      <a
+        v-for="f in families.filter((f) => f.members.includes(draft.id))"
+        :key="f.id"
+        :href="'#/families/' + f.id"
+        >{{ f.name }} · Открыть дерево
+      </a>
+    </section>
     <section class="panel character-basics">
       <label
         >Имя<input

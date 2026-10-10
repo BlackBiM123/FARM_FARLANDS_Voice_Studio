@@ -67,7 +67,7 @@ it("rejects stale revisions instead of overwriting a newer cloud project", async
   } as unknown as ReturnType<typeof createClient>);
   const r = await handleCloud(
     request("/api/cloud", "PUT", {
-      project: { version: 1, npcs: [], gameCharacter: true },
+      project: { version: 1, npcs: [], gameCharacter: true, families: [] },
       revision: 4,
     }),
   );
@@ -163,23 +163,32 @@ it("preserves character profiles when an older voice-only client submits a proje
   };
   const read = {
     eq: vi.fn().mockReturnThis(),
-    single: vi
-      .fn()
-      .mockResolvedValue({
-        data: {
-          payload: {
-            version: 1,
-            npcs: [
-              {
-                ...legacy,
-                profile: { biography: "Keep this biography", age: 42 },
-              },
-            ],
-            gameCharacter: true,
-          },
+    single: vi.fn().mockResolvedValue({
+      data: {
+        payload: {
+          version: 1,
+          npcs: [
+            {
+              ...legacy,
+              profile: { biography: "Keep this biography", age: 42 },
+              photo: "data:image/jpeg;base64,YQ==",
+            },
+          ],
+          gameCharacter: true,
+          families: [
+            {
+              id: "b3a1765e-741f-43c7-bf15-b1b47e564047",
+              name: "Keep family",
+              description: "",
+              home: "",
+              members: [legacy.id],
+              links: [],
+            },
+          ],
         },
-        error: null,
-      }),
+      },
+      error: null,
+    }),
   };
   const write = {
     eq: vi.fn().mockReturnThis(),
@@ -207,4 +216,6 @@ it("preserves character profiles when an older voice-only client submits a proje
   expect(payload.npcs[0].name).toBe("Updated voice name");
   expect(payload.npcs[0].profile.biography).toBe("Keep this biography");
   expect(payload.npcs[0].profile.age).toBe(42);
+  expect(payload.npcs[0].photo).toBe("data:image/jpeg;base64,YQ==");
+  expect(payload.families[0].name).toBe("Keep family");
 });

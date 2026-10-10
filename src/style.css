@@ -1271,3 +1271,139 @@ footer {
     justify-content: flex-start;
   }
 }
+.family-page {
+  display: grid;
+  gap: 18px;
+}
+.family-list,
+.family-members,
+.family-compare {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.family-meta,
+.family-links {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.family-meta label {
+  flex: 1;
+  min-width: 200px;
+}
+.family-links h3,
+.family-links .hint,
+.family-link-row {
+  width: 100%;
+}
+.family-members label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.family-members img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.family-members input {
+  width: auto;
+}
+.tree-viewport {
+  overflow: auto;
+  height: 480px;
+  border: 1px solid #353940;
+  background: radial-gradient(#34383d 1px, transparent 1px) 0 0/20px 20px;
+  cursor: grab;
+  touch-action: none;
+}
+.tree-canvas {
+  position: relative;
+  transform-origin: top left;
+}
+.tree-canvas svg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tree-person {
+  position: absolute;
+  width: 160px;
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: #202329;
+  border: 1px solid #555b65;
+  border-radius: 10px;
+  padding: 8px;
+  overflow: hidden;
+}
+.tree-person img,
+.tree-initial {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.tree-initial {
+  display: grid;
+  place-items: center;
+  background: #4b3d26;
+  color: #f3bb58;
+  font-size: 26px;
+}
+.tree-person strong {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-person small {
+  max-width: 140px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.family-compare {
+  align-items: end;
+  margin-top: 18px;
+}
+.photo-editor {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.photo-editor > img {
+  width: 100px;
+  height: 100px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.family-link-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  .tree-viewport {
+    height: 380px;
+  }
+  .family-links label {
+    width: 100%;
+  }
+}
+.family-page .panel {
+  padding: 20px;
+}
