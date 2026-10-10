@@ -49,6 +49,7 @@ export const npcSchema = z.object({
     .max(100000)
     .regex(/^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
     .optional(),
+  sourceText: z.string().max(50000).optional(),
   profile: characterProfileSchema.default(emptyProfile),
 });
 export const projectSchema = z

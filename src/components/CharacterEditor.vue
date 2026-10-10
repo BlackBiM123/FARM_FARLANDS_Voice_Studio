@@ -644,6 +644,20 @@ function link(index: number, e: Event) {
         >
       </section>
     </div>
+    <details v-if="draft.sourceText" class="panel source-brief">
+      <summary>Исходная анкета · полный текст и статус утверждения</summary>
+      <label
+        >Исходный текст анкеты<textarea
+          v-model="draft.sourceText"
+          maxlength="50000"
+          rows="20"
+        />
+      </label>
+      <p class="hint">
+        Исходник хранится отдельно. Изменения здесь не заполняют поля профиля
+        автоматически.
+      </p>
+    </details>
     <div class="character-bottom-actions">
       <button type="button" @click="emit('cancel')">
         Вернуться к персонажам</button
