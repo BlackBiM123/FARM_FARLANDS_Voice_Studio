@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onUnmounted } from "vue";
 import {
   Plus,
   GripVertical,
@@ -7,6 +7,9 @@ import {
   ArrowUp,
   ArrowDown,
   Trash2,
+  Play,
+  Pause,
+  ChevronDown,
 } from "lucide-vue-next";
 import {
   dialogueLineSchema,
@@ -60,6 +63,41 @@ watch(
   },
 );
 const countPerPage = 25;
+watch(page, stopAudio);
+watch(
+  [query, npcFilter, typeFilter, completion, groupBy, scenarioFilter],
+  stopAudio,
+);
+const playing = ref<string | null>(null);
+function stopAudio() {
+  document.querySelectorAll("audio").forEach((a) => a.pause());
+  playing.value = null;
+}
+function toggleLine(id: string) {
+  stopAudio();
+  detail.value = detail.value === id ? null : id;
+}
+async function playCompact(id: string, lang: "ru" | "en", event: Event) {
+  const audio = (event.currentTarget as HTMLElement)
+    .closest("td")
+    ?.querySelector("audio");
+  if (!audio) return;
+  if (!audio.paused) {
+    audio.pause();
+    return;
+  }
+  stopAudio();
+  try {
+    await audio.play();
+    playing.value = id + lang;
+  } catch {
+    message.value = "Не удалось воспроизвести аудио. Проверьте доступ к дублю.";
+  }
+}
+function resetPlaying(id: string, lang: "ru" | "en") {
+  if (playing.value === id + lang) playing.value = null;
+}
+onUnmounted(stopAudio);
 const speaker = (id: string) => props.npcs.find((n) => n.id === id);
 const take = (line: DialogueLine, lang: "ru" | "en") =>
   props.takes.find((t) => t.id === line[lang].takeId);
@@ -180,7 +218,7 @@ function addLine() {
     scenarioId: scenarioFilter.value || null,
     type: typeFilter.value || "greeting",
   });
-  lines.value = [...lines.value, line];
+  lines.value = [line, ...lines.value];
   query.value = "";
   completion.value = "";
   page.value = 1;
@@ -469,9 +507,101 @@ function pauseOthers(e: Event) {
             </tr>
           </thead>
           <tbody>
-            <template v-for="l in section.rows" :key="l.id"
-              ><tr
-                :class="{ 'line-dragging': dragged === l.id }"
+            <template v-for="l in section.rows" :key="l.id">
+              <tr
+                v-if="detail !== l.id"
+                class="line-summary"
+                :class="[
+                  'text-status-' + l.status,
+                  { 'line-dragging': dragged === l.id },
+                ]"
+                @click="toggleLine(l.id)"
+                @dragover.prevent.stop
+                @drop.prevent.stop="rowDrop(l, $event)"
+              >
+                <td class="line-meta" :title="lineStatusLabels[l.status]">
+                  <div class="line-speaker">
+                    <button
+                      class="drag-handle"
+                      :draggable="!busy"
+                      aria-label="Перетащить реплику"
+                      @click.stop
+                      @dragstart="startDrag(l, $event)"
+                      @dragend="
+                        dragged = '';
+                        dropTarget = '';
+                      "
+                    >
+                      <GripVertical :size="18" /></button
+                    ><img
+                      v-if="speaker(l.npcId)?.photo"
+                      :src="speaker(l.npcId)!.photo"
+                      :alt="speaker(l.npcId)!.name"
+                    /><span class="compact-speaker-name">{{
+                      speaker(l.npcId)?.name
+                    }}</span>
+                  </div>
+                </td>
+                <td
+                  v-for="lang in ['ru', 'en'] as const"
+                  :key="lang"
+                  :class="'line-' + lang"
+                  class="compact-locale"
+                >
+                  <div class="compact-audio-line">
+                    <span class="compact-line-text" :title="l[lang].text">{{
+                      l[lang].text || "Текст пока не написан"
+                    }}</span
+                    ><button
+                      class="compact-play"
+                      :disabled="!take(l, lang)"
+                      :aria-label="
+                        (playing === l.id + lang
+                          ? 'Приостановить '
+                          : 'Воспроизвести ') +
+                        lang.toUpperCase() +
+                        ' — ' +
+                        l.key
+                      "
+                      :title="
+                        take(l, lang)
+                          ? 'Прослушать ' + lang.toUpperCase()
+                          : 'Нет озвучки ' + lang.toUpperCase()
+                      "
+                      @click.stop="playCompact(l.id, lang, $event)"
+                    >
+                      <Pause v-if="playing === l.id + lang" :size="16" /><Play
+                        v-else
+                        :size="16"
+                      /></button
+                    ><audio
+                      v-if="take(l, lang)"
+                      hidden
+                      preload="none"
+                      :src="urls[take(l, lang)!.id]"
+                      @ended="resetPlaying(l.id, lang)"
+                      @pause="resetPlaying(l.id, lang)"
+                    />
+                  </div>
+                </td>
+                <td class="compact-expand">
+                  <button
+                    class="icon"
+                    :aria-label="'Развернуть реплику — ' + l.key"
+                    :aria-expanded="false"
+                    @click.stop="toggleLine(l.id)"
+                  >
+                    <ChevronDown :size="16" />
+                  </button>
+                </td>
+              </tr>
+              <tr
+                v-else
+                class="line-expanded"
+                :class="[
+                  'text-status-' + l.status,
+                  { 'line-dragging': dragged === l.id },
+                ]"
                 @dragover.prevent.stop
                 @drop.prevent.stop="rowDrop(l, $event)"
               >
@@ -515,21 +645,26 @@ function pauseOthers(e: Event) {
                       maxlength="80"
                       @change="checkKey(l, $event)" /></label
                   ><label
-                    >Статус текста<select v-model="l.status">
-                      <option
-                        v-for="status in lineStatuses"
-                        :key="status"
-                        :value="status"
-                      >
-                        {{ lineStatusLabels[status] }}
-                      </option>
-                    </select></label
+                    >Статус текста<span class="text-status-control"
+                      ><select v-model="l.status" aria-label="Статус текста">
+                        <option
+                          v-for="status in lineStatuses"
+                          :key="status"
+                          :value="status"
+                        >
+                          {{ lineStatusLabels[status] }}
+                        </option></select
+                      ><span
+                        class="text-status-dot"
+                        role="img"
+                        :aria-label="lineStatusLabels[l.status]"
+                        :title="lineStatusLabels[l.status]" /></span></label
                   ><button
                     class="text-button"
                     :aria-expanded="detail === l.id"
-                    @click="detail = detail === l.id ? null : l.id"
+                    @click="toggleLine(l.id)"
                   >
-                    {{ detail === l.id ? "Скрыть" : "Контекст и подача" }}
+                    Свернуть реплику
                   </button>
                 </td>
                 <td

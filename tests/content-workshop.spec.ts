@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import JSZip from "jszip";
 import { projectSchema, type TakeMetadata } from "../shared/schema";
 function wav() {
-  const b = Buffer.alloc(44 + 4800);
+  const b = Buffer.alloc(44 + 240000);
   b.write("RIFF");
   b.writeUInt32LE(b.length - 8, 4);
   b.write("WAVEfmt ", 8);
@@ -14,7 +14,7 @@ function wav() {
   b.writeUInt16LE(2, 32);
   b.writeUInt16LE(16, 34);
   b.write("data", 36);
-  b.writeUInt32LE(4800, 40);
+  b.writeUInt32LE(240000, 40);
   return b;
 }
 test("bilingual dialogue, audio reuse, drag groups, conflicts and clean-browser cloud restore", async ({
@@ -132,7 +132,8 @@ test("bilingual dialogue, audio reuse, drag groups, conflicts and clean-browser 
     .getByRole("button", { name: "Реплика инициатора", exact: true })
     .click();
   await expect(page).toHaveURL(/#\/dialogue\//);
-  const row = page.locator(".dialogue-table tbody tr").first();
+  await page.locator(".line-summary .compact-expand button").first().click();
+  const row = page.locator(".line-expanded");
   await row.locator(".line-ru textarea").fill("Поговорим после сбора урожая.");
   await row.locator(".line-en textarea").fill("Let us talk after the harvest.");
   await row.getByRole("button", { name: "Озвучить RU", exact: true }).click();
@@ -153,6 +154,51 @@ test("bilingual dialogue, audio reuse, drag groups, conflicts and clean-browser 
   await row.getByRole("button", { name: "Копировать", exact: true }).click();
   await expect(page.locator(".line-ru audio")).toHaveCount(2);
   expect(records.size).toBe(2);
+  await expect(page.locator(".line-expanded")).toHaveCount(1);
+  await page.locator(".line-summary .compact-expand button").first().click();
+  await expect(page.locator(".line-expanded")).toHaveCount(1);
+  await page
+    .getByLabel("Статус текста", { exact: true })
+    .selectOption("approved");
+  await expect(page.locator(".line-expanded")).toHaveClass(
+    /text-status-approved/,
+  );
+  expect(
+    await page
+      .locator(".line-expanded .text-status-dot")
+      .evaluate((e) => getComputedStyle(e).backgroundColor),
+  ).toBe("rgb(101, 201, 139)");
+  await page
+    .getByRole("button", { name: "Свернуть реплику", exact: true })
+    .click();
+  await expect(page.locator(".line-expanded")).toHaveCount(0);
+  await expect(page.locator(".line-summary")).toHaveCount(2);
+  const compact = page.locator(".line-summary").first();
+  expect(
+    await compact.evaluate((e) => e.getBoundingClientRect().height),
+  ).toBeLessThanOrEqual(66);
+  expect(
+    await compact
+      .locator(".line-meta")
+      .evaluate((e) => getComputedStyle(e, "::before").width),
+  ).toBe("5px");
+  await compact.locator(".line-ru .compact-play").click();
+  await expect
+    .poll(() =>
+      compact
+        .locator(".line-ru audio")
+        .evaluate((a: HTMLAudioElement) => a.paused),
+    )
+    .toBe(false);
+  await compact.locator(".line-en .compact-play").click();
+  await expect
+    .poll(() =>
+      compact
+        .locator(".line-ru audio")
+        .evaluate((a: HTMLAudioElement) => a.paused),
+    )
+    .toBe(true);
+  await expect(page.locator(".line-expanded")).toHaveCount(0);
   await page.getByText("Свои группы · 1", { exact: true }).click();
   await page.getByLabel("Название новой группы").fill("После урожая");
   await page
