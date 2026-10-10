@@ -20,6 +20,8 @@ import { gameStyleRule } from "../shared/game-style";
 const gameCharacter = ref(loadGameCharacter());
 import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
+import VoiceDesigner from "./components/VoiceDesigner.vue";
+import type { DesignedVoice } from "../shared/designed-voice";
 import QuotaPanel from "./components/QuotaPanel.vue";
 import UserAdmin from "./components/UserAdmin.vue";
 import FamilyEditor from "./components/FamilyEditor.vue";
@@ -295,13 +297,30 @@ function filterVoices(gender: "all" | "male" | "female") {
   if (
     npc.value &&
     gender !== "all" &&
-    voiceInfo[npc.value.settings.voice].gender !== gender
+    voiceInfo[npc.value.settings.voice as keyof typeof voiceInfo]?.gender !==
+      gender
   ) {
     npc.value.settings.voice = voices.find(
       (v) => voiceInfo[v].gender === gender,
     )!;
   }
 }
+function selectDesignedVoice(voice: DesignedVoice) {
+  if (!npc.value) return;
+  npc.value.settings.voice = voice.id;
+  npc.value.settings.designedVoice = voice;
+  notice.value = "Выбран собственный тембр: " + voice.name;
+}
+const currentVoiceDetails = computed(() => {
+  const s = npc.value?.settings;
+  if (!s) return { gender: "neutral", character: "" };
+  return (
+    voiceInfo[s.voice as keyof typeof voiceInfo] ?? {
+      gender: s.designedVoice?.gender || "neutral",
+      character: s.designedVoice?.name || "Собственный тембр",
+    }
+  );
+});
 const quotaPanel = ref<InstanceType<typeof QuotaPanel> | null>(null);
 const authenticated = ref(false),
   loginBusy = ref(false);
@@ -817,7 +836,11 @@ function pauseOthers(e: Event) {
           </p>
           <small
             >{{ n.profile.relationships.length }} связей ·
-            {{ n.settings.voice }}</small
+            {{
+              n.settings.designedVoice?.id === n.settings.voice
+                ? n.settings.designedVoice.name
+                : n.settings.voice
+            }}</small
           >
           <div class="character-card-actions">
             <button @click="openCharacter(n.id)">Редактировать</button
@@ -898,7 +921,9 @@ function pauseOthers(e: Event) {
           ></span
         ><span class="cast-voice"
           ><ArrowRight :size="20" /><strong>{{
-            n.settings.voice
+            n.settings.designedVoice?.id === n.settings.voice
+              ? n.settings.designedVoice.name
+              : n.settings.voice
           }}</strong></span
         ><em>{{ n.settings.direction }}</em>
       </button>
@@ -973,6 +998,12 @@ function pauseOthers(e: Event) {
           <div class="fields">
             <label
               >Голос Gemini<select v-model="npc.settings.voice">
+                <option
+                  v-if="npc.settings.voice.startsWith('voice_')"
+                  :value="npc.settings.voice"
+                >
+                  {{ npc.settings.designedVoice?.name || "Собственный тембр" }}
+                </option>
                 <optgroup
                   v-for="gender in ['female', 'male'] as const"
                   :key="gender"
@@ -1024,13 +1055,12 @@ function pauseOthers(e: Event) {
             </button>
           </div>
           <p class="voice-description">
-            <span
-              class="gender-tag"
-              :class="voiceInfo[npc.settings.voice].gender"
-              >{{ genderLabel(npc.settings.voice) }}</span
-            >
-            {{ voiceInfo[npc.settings.voice].character }}
+            <span class="gender-tag" :class="currentVoiceDetails.gender">{{
+              genderLabel(npc.settings.voice)
+            }}</span>
+            {{ currentVoiceDetails.character }}
           </p>
+          <VoiceDesigner :key="npc.id" @select="selectDesignedVoice" />
           <div class="emotion-heading">
             <h3>Пресеты эмоций</h3>
             <small>Выберите подачу одним нажатием</small>

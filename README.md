@@ -102,3 +102,9 @@ Small character image files (up to 70 KB, JPEG/PNG/WebP) now retain their origin
 Original PNG/JPEG/WebP character images up to 350 KB are retained unchanged in photo/fullImage (500 KB data URL field cap). The 3.5 MB total project request cap still applies.
 
 Images larger than 350 KB now upload unchanged through the protected /api/image endpoint to the private studio-images bucket (created lazily by the server; max 3 MB per PNG/JPEG/WebP). Profiles hold same-origin authenticated references. Godot ZIP export includes all image files and replaces references with res:// paths. Small legacy inline portraits remain supported. Image deletion/orphan cleanup is not yet implemented.
+
+## Designed voices
+
+The authenticated `/api/voices` proxy lists stored prompted Gemini voices and serves private WAV previews. Only studio administrators can create a voice. API credentials stay server-side. Voice Design requires provider access and consumes the project quota; it never enables billing. Three fictional eight-year-old girl descriptions are provided as audition starting points, not a guarantee of perceived age.
+
+Selecting a designed voice stores its ID, name, description and expiry in the NPC settings and exports. The vocal persona itself is stored in the linked Gemini project and may expire after inactivity; the panel displays provider expiry. Turn-level emotion and pace remain separate. A timeout can occur after provider creation: refresh the voice list before retrying to avoid duplicates.

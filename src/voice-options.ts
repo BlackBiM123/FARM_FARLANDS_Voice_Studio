@@ -19,8 +19,9 @@ export const voiceInfo: Record<
   Zephyr: { gender: "female", character: "Яркий" },
   Orus: { gender: "male", character: "Твёрдый" },
 };
-export function genderLabel(voice: VoiceName) {
-  return voiceInfo[voice].gender === "male"
+export function genderLabel(voice: string) {
+  if (!(voice in voiceInfo)) return "Собственный тембр";
+  return voiceInfo[voice as VoiceName].gender === "male"
     ? "Мужской · Male"
     : "Женский · Female";
 }

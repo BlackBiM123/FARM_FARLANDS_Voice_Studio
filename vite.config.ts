@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { handleTTS } from "./server/tts.js";
 import { handleSession } from "./server/session.js";
 import { handleCloud } from "./server/cloud.js";
+import { handleVoices } from "./server/voices.js";
 import { handleImage } from "./server/image.js";
 import { handleAudio } from "./server/audio.js";
 import { handleUsers } from "./server/users.js";
@@ -34,6 +35,7 @@ export default defineConfig(({ mode }) => {
             "audio",
             "users",
             "image",
+            "voices",
           ])
             server.middlewares.use("/api/" + route, async (req, res) => {
               try {
@@ -81,6 +83,7 @@ export default defineConfig(({ mode }) => {
                   cloud: handleCloud,
                   audio: handleAudio,
                   image: handleImage,
+                  voices: handleVoices,
                   users: handleUsers,
                 }[route]!(request);
                 res.statusCode = response.status;

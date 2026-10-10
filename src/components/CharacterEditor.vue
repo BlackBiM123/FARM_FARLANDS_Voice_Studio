@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import VoiceDesigner from "./VoiceDesigner.vue";
 import {
   emptyProfile,
   relationshipKinds,
@@ -516,6 +517,14 @@ function link(index: number, e: Event) {
           ><div class="character-fields">
             <label
               >Голос Gemini<select v-model="draft.settings.voice">
+                <option
+                  v-if="draft.settings.voice.startsWith('voice_')"
+                  :value="draft.settings.voice"
+                >
+                  {{
+                    draft.settings.designedVoice?.name || "Собственный тембр"
+                  }}
+                </option>
                 <option v-for="v in voices" :key="v" :value="v">
                   {{ v }} — {{ genderLabel(v) }} · {{ voiceInfo[v].character }}
                 </option>
@@ -526,6 +535,14 @@ function link(index: number, e: Event) {
               </select></label
             >
           </div>
+          <VoiceDesigner
+            @select="
+              (v) => {
+                draft.settings.voice = v.id;
+                draft.settings.designedVoice = v;
+              }
+            "
+          />
           <h4>Пресеты эмоций</h4>
           <div class="emotion-presets">
             <button

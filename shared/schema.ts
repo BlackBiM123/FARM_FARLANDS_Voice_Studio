@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { characterProfileSchema, emptyProfile } from "./character.js";
 import { familySchema, familyError } from "./family.js";
+import { customVoiceId, designedVoiceSchema } from "./designed-voice.js";
 export const voices = [
   "Sadachbia",
   "Algenib",
@@ -22,7 +23,8 @@ export const models = [
   "gemini-3.8-flash-lite-tts",
 ] as const;
 export const settingsSchema = z.object({
-  voice: z.enum(voices),
+  voice: z.union([z.enum(voices), customVoiceId]),
+  designedVoice: designedVoiceSchema.optional(),
   model: z.enum(models),
   emotion: z.string().max(100),
   pace: z.number().min(0.5).max(1.5),
