@@ -77,6 +77,16 @@ test("family tree, portrait, kinship and persisted draft", async ({ page }) => {
     .click();
   await expect(page.locator(".tree-person")).toHaveCount(2);
   await expect(page.locator(".tree-person img")).toHaveCount(1);
+  await page.locator(".tree-person img").scrollIntoViewIfNeeded();
+  await page.locator(".tree-person img").hover();
+  await expect(page.getByRole("tooltip")).toBeVisible();
+  const bounds = await page.getByRole("tooltip").boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
   await page.getByLabel("Кто", { exact: true }).selectOption(ids[1]!);
   await page.getByLabel("Кому", { exact: true }).selectOption(ids[2]!);
   await expect(page.locator(".family-compare strong")).toHaveText("Родитель");

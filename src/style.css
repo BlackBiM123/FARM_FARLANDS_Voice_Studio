@@ -1419,3 +1419,118 @@ footer {
 .photo-editor > img {
   image-rendering: pixelated;
 }
+/* Character panels share a consistent rhythm, including imported briefs and images. */
+.character-page > .photo-editor,
+.character-family-summary,
+.source-brief {
+  padding: 22px;
+  margin-bottom: 20px;
+}
+.character-page > .photo-editor {
+  gap: 24px;
+}
+.photo-editor label {
+  flex: 1;
+  min-width: 220px;
+  margin: 0;
+}
+.photo-editor small {
+  display: block;
+  margin-top: 10px;
+  line-height: 1.6;
+}
+.character-family-summary h3 {
+  margin: 0 0 12px;
+}
+.character-family-summary a {
+  display: inline-block;
+  margin-right: 18px;
+  line-height: 1.7;
+}
+.character-page-body {
+  margin-bottom: 22px;
+}
+.character-basics {
+  margin-bottom: 22px;
+}
+.character-fields {
+  row-gap: 12px;
+}
+.source-brief summary {
+  cursor: pointer;
+  color: #e5bd77;
+  line-height: 1.6;
+}
+.source-brief[open] summary {
+  margin-bottom: 18px;
+}
+.source-brief textarea {
+  line-height: 1.7;
+}
+.source-brief .hint {
+  margin-top: 12px;
+}
+.family-page h3 {
+  margin: 0 0 16px;
+}
+.family-page .hint {
+  line-height: 1.7;
+  margin: 12px 0 18px;
+}
+.family-link-row {
+  padding: 12px 0;
+  border-top: 1px solid #333940;
+}
+.image-hover-preview {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #8c7043;
+  border-radius: 12px;
+  background: #181c23;
+  box-shadow: 0 16px 48px #000a;
+  overflow: hidden;
+}
+.image-hover-preview img {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: repeating-conic-gradient(#20242b 0% 25%, #282d34 0% 50%) 50%/18px
+    18px;
+  border-radius: 6px;
+}
+.image-hover-preview span {
+  font-size: 11px;
+  color: #e8c78d;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.photo-editor img,
+.portrait img,
+.tree-person img,
+.family-members img {
+  cursor: zoom-in;
+}
+@media (max-width: 600px) {
+  .character-page > .photo-editor,
+  .character-family-summary,
+  .source-brief {
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .photo-editor label {
+    min-width: 0;
+    width: 100%;
+  }
+  .character-fields {
+    row-gap: 8px;
+  }
+}

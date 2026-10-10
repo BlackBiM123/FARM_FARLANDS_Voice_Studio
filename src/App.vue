@@ -25,6 +25,7 @@ import UserAdmin from "./components/UserAdmin.vue";
 import FamilyEditor from "./components/FamilyEditor.vue";
 import { loadFamilies } from "./storage";
 const families = ref(loadFamilies());
+import ImageHoverPreview from "./components/ImageHoverPreview.vue";
 import CharacterEditor from "./components/CharacterEditor.vue";
 import type { NPC } from "../shared/schema";
 const characterHash = ref(window.location.hash),
@@ -621,6 +622,7 @@ function pauseOthers(e: Event) {
 </script>
 
 <template>
+  <ImageHoverPreview />
   <div v-if="sessionChecking" class="login-shell"><p>Проверка входа…</p></div>
   <section v-else-if="!authenticated" class="login-shell">
     <form class="login-card panel" @submit.prevent="login">

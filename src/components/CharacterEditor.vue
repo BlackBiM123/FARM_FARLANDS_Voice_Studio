@@ -305,7 +305,7 @@ function link(index: number, e: Event) {
     </section>
     <section
       v-if="families?.some((f) => f.members.includes(draft.id))"
-      class="panel"
+      class="panel character-family-summary"
     >
       <h3>Семья</h3>
       <a
