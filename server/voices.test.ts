@@ -129,4 +129,31 @@ describe("Voice design", () => {
     expect(r.headers.get("Cache-Control")).toContain("private");
     expect(Buffer.from(await r.arrayBuffer())).toEqual(wav);
   });
+  it("explains policy rejection in Russian without claiming a voice was created", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            {
+              error: {
+                status: "INVALID_ARGUMENT",
+                message: "Voice prompt was blocked by safety policies.",
+              },
+            },
+            { status: 400 },
+          ),
+        ),
+    );
+    const r = await handleVoices(req("POST", design));
+    const data = (await r.json()) as {
+      policyBlocked: boolean;
+      error: string;
+      voice?: unknown;
+    };
+    expect(data.policyBlocked).toBe(true);
+    expect(data.error).toContain("Тембр не создан");
+    expect(data.voice).toBeUndefined();
+  });
 });

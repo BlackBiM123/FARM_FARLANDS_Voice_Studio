@@ -88,6 +88,9 @@ export async function handleVoices(request: Request): Promise<Response> {
         error?: { status?: string; message?: string };
       };
       const status = upstream.status;
+      const policyBlocked =
+        status === 400 &&
+        /blocked by safety policies/i.test(data.error?.message ?? "");
       const diagnostic =
         status === 400 && typeof data.error?.message === "string"
           ? data.error.message
@@ -105,11 +108,14 @@ export async function handleVoices(request: Request): Promise<Response> {
                 ? "Gemini Voice Design недоступен для этого API-проекта."
                 : status === 403
                   ? "Gemini не разрешает Voice Design для этого проекта или региона."
-                  : status === 400
-                    ? "Gemini отклонил описание голоса или параметры создания. " +
-                      diagnostic
-                    : "Gemini не смог выполнить запрос создания голоса.",
+                  : policyBlocked
+                    ? "Google заблокировал это описание голоса по своим правилам безопасности. Тембр не создан. Детские описания могут быть недоступны в Gemini Voice Design."
+                    : status === 400
+                      ? "Gemini отклонил описание голоса или параметры создания. " +
+                        diagnostic
+                      : "Gemini не смог выполнить запрос создания голоса.",
           providerStatus: status,
+          policyBlocked,
           providerCode:
             typeof data.error?.status === "string"
               ? data.error.status

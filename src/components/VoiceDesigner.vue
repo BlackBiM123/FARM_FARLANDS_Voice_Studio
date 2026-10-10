@@ -85,7 +85,8 @@ onUnmounted(() => Object.values(sampleUrls.value).forEach(URL.revokeObjectURL));
     <p class="hint">
       Возраст и тембр задаются при создании голоса. Эмоции меняются отдельно для
       каждой реплики. Детское звучание оценивайте по аудио, оно не
-      гарантируется.
+      гарантируется. Google может блокировать детские описания по правилам Voice
+      Design.
     </p>
     <div class="designer-presets">
       <button
