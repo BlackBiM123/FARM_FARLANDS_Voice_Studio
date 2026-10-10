@@ -98,3 +98,5 @@ The Families page edits named households, membership and directed biological/ado
 Character photos accept JPEG, PNG and WebP up to 10 MB. The browser crops the center to a 160px JPEG portrait (max 24 KB), discards original metadata and saves only the portrait within the protected project payload. Original full-resolution images are not retained. Families and portraits are included in JSON/Godot exports and existing cloud revision protection.
 
 Small character image files (up to 70 KB, JPEG/PNG/WebP) now retain their original bytes and transparency in the project. A separate fullImage field stores an un-cropped full-body image. Larger portrait uploads still use the 160px crop. Both fields support up to 100 KB of data URL text and are preserved when older clients omit them.
+
+Original PNG/JPEG/WebP character images up to 350 KB are retained unchanged in photo/fullImage (500 KB data URL field cap). The 3.5 MB total project request cap still applies.

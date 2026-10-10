@@ -77,7 +77,7 @@ async function uploadPhoto(event: Event) {
     return;
   }
   try {
-    if (file.size <= 70000) {
+    if (file.size <= 350000) {
       const reader = new FileReader();
       const data = await new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(String(reader.result));
@@ -124,10 +124,10 @@ async function uploadFullImage(event: Event) {
   if (!file) return;
   if (
     !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
-    file.size > 70000
+    file.size > 350000
   ) {
     error.value =
-      "Изображение в полный рост: JPG, PNG или WebP до 70 КБ. Исходный файл сохраняется без обрезки.";
+      "Изображение в полный рост: JPG, PNG или WebP до 350 КБ. Исходный файл сохраняется без обрезки.";
     return;
   }
   try {
@@ -271,7 +271,7 @@ function link(index: number, e: Event) {
           accept="image/jpeg,image/png,image/webp"
           @change="uploadPhoto"
         /><small
-          >JPG, PNG или WebP до 10 МБ. Файлы до 70 КБ сохраняются как есть;
+          >JPG, PNG или WebP до 10 МБ. Файлы до 350 КБ сохраняются как есть;
           более крупные обрезаются до портрета.</small
         ></label
       >
@@ -292,7 +292,7 @@ function link(index: number, e: Event) {
           aria-label="Изображение в полный рост"
           @change="uploadFullImage"
         /><small
-          >До 70 КБ. Сохраняется без обрезки, с исходной прозрачностью.</small
+          >До 350 КБ. Сохраняется без обрезки, с исходной прозрачностью.</small
         ></label
       >
       <button

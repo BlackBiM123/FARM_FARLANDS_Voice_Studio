@@ -41,12 +41,12 @@ export const npcSchema = z.object({
   settings: settingsSchema,
   photo: z
     .string()
-    .max(100000)
+    .max(500000)
     .regex(/^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
     .optional(),
   fullImage: z
     .string()
-    .max(100000)
+    .max(500000)
     .regex(/^$|^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
     .optional(),
   sourceText: z.string().max(50000).optional(),
