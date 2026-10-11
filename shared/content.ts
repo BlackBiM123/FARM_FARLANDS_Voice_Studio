@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  mechanicsSchema,
+  outcomeSchema,
+  obligationSchema,
+  factKeys,
+} from "./scenario-mechanics.js";
 const npcId = z.string().regex(/^[a-z0-9_-]{1,60}$/);
 export const lineTypes = [
   "greeting",
@@ -51,6 +57,10 @@ export const dialogueLineSchema = z.object({
   direction: z.string().max(1000).default(""),
   scenarioId: z.string().uuid().nullable().default(null),
   recipientId: npcId.nullable().default(null),
+  outcomeIds: z.array(z.string().uuid()).max(20).default([]),
+  requiredFacts: factKeys,
+  knownFacts: factKeys,
+  moment: z.enum(["scene", "aftermath", "any"]).default("scene"),
 });
 export const scenarioStates = [
   "draft",
@@ -104,6 +114,10 @@ export const effectMetricLabels = {
 };
 export const scenarioSchema = z.object({
   id: z.string().uuid(),
+  key: z
+    .string()
+    .regex(/^$|^[a-z0-9_-]{1,80}$/)
+    .default(""),
   title: z.string().trim().min(1).max(120),
   kind: z.enum(["interaction", "conflict"]),
   type: z.enum(scenarioTypes).default("conversation"),
@@ -120,6 +134,20 @@ export const scenarioSchema = z.object({
   resolution: z.string().max(1500).default(""),
   memory: z.string().max(1000).default(""),
   cooldownHours: z.number().min(0).max(8760).default(0),
+  sourceText: z.string().max(50000).default(""),
+  mechanics: mechanicsSchema.default(() => mechanicsSchema.parse({})),
+  outcomes: z.array(outcomeSchema).max(20).default([]),
+  facts: z
+    .array(
+      z.object({
+        key: z.string().regex(/^[a-z0-9_.:-]{1,100}$/),
+        label: z.string().trim().min(1).max(250),
+        description: z.string().max(1000).default(""),
+      }),
+    )
+    .max(100)
+    .default([]),
+  obligations: z.array(obligationSchema).max(20).default([]),
   effects: z
     .array(
       z.object({
@@ -129,6 +157,8 @@ export const scenarioSchema = z.object({
         metric: z.enum(effectMetrics),
         delta: z.number().min(-100).max(100),
         note: z.string().max(500).default(""),
+        outcomeIds: z.array(z.string().uuid()).max(20).default([]),
+        requiredFacts: factKeys,
       }),
     )
     .max(30)
@@ -177,6 +207,11 @@ export function contentErrors(p: {
       errors.push(
         "У реплики есть ссылка на отсутствующего персонажа, группу или сценарий",
       );
+  for (const l of p.dialogueLines) {
+    const s = p.scenarios.find((s) => s.id === l.scenarioId);
+    if (l.outcomeIds.some((id) => !s?.outcomes.some((o) => o.id === id)))
+      errors.push("У реплики есть ссылка на отсутствующий исход");
+  }
   for (const s of p.scenarios) {
     if (
       (s.initiatorId && !ids.has(s.initiatorId)) ||
@@ -193,6 +228,35 @@ export function contentErrors(p: {
       errors.push("Участники сценария повторяются");
     if (new Set(s.effects.map((e) => e.id)).size !== s.effects.length)
       errors.push("Повтор ID последствия");
+    const outcomeIds = new Set(s.outcomes.map((o) => o.id));
+    if (new Set(s.facts.map((f) => f.key)).size !== s.facts.length)
+      errors.push("Ключи фактов сценария повторяются");
+    if (
+      outcomeIds.size !== s.outcomes.length ||
+      new Set(s.outcomes.map((o) => o.key)).size !== s.outcomes.length
+    )
+      errors.push("Исходы сценария должны иметь уникальные ID и ключи");
+    if (s.effects.some((e) => e.outcomeIds.some((id) => !outcomeIds.has(id))))
+      errors.push("Последствие ссылается на отсутствующий исход");
+    if (
+      new Set(s.obligations.map((o) => o.id)).size !== s.obligations.length ||
+      new Set(s.obligations.map((o) => o.key)).size !== s.obligations.length
+    )
+      errors.push("Обязательства должны иметь уникальные ID и ключи");
+    if (
+      s.obligations.some(
+        (o) =>
+          (o.fromId && !ids.has(o.fromId)) ||
+          (o.toId && !ids.has(o.toId)) ||
+          (o.createdByOutcomeId && !outcomeIds.has(o.createdByOutcomeId)),
+      )
+    )
+      errors.push(
+        "Обязательство ссылается на отсутствующего участника или исход",
+      );
   }
+  const keys = p.scenarios.map((s) => s.key).filter(Boolean);
+  if (new Set(keys).size !== keys.length)
+    errors.push("Ключи сценариев должны быть уникальными");
   return [...new Set(errors)];
 }

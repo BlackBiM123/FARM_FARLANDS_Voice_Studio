@@ -790,3 +790,73 @@ nav {
   height: 7px;
   box-shadow: none;
 }
+.event-phase-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 22px 0;
+}
+.event-phase-strip span {
+  padding: 14px 18px;
+  border: 1px solid #655238;
+  border-radius: 8px;
+  background: #d4ad6520;
+  color: #dfbf86;
+}
+.outcome-card {
+  padding: 22px;
+  border: 1px solid #3a4550;
+  border-radius: 10px;
+  background: #121920;
+  margin: 18px 0;
+}
+.outcome-card > button {
+  margin-top: 18px;
+}
+.content-page .mechanic-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.5;
+  color: #c3c1b7;
+}
+.mechanic-check input {
+  width: auto;
+  flex: none;
+}
+.mechanic-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin: 14px 0 22px;
+}
+.scenario-mechanics h5 {
+  margin: 26px 0 16px;
+  color: #ddba82;
+}
+.preview-mechanics summary {
+  cursor: pointer;
+  color: #e6bd76;
+  margin-bottom: 18px;
+}
+.effect-branches > span {
+  display: block;
+  color: #a3acb7;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.effect-branches .mechanic-checks {
+  margin-bottom: 0;
+}
+.preview-mechanics > label {
+  margin: 20px 0;
+}
+.preview-mechanics small {
+  color: #b6ac93;
+}
+.group-manager textarea {
+  width: 100%;
+  margin-top: 18px;
+}

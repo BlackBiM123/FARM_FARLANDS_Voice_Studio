@@ -86,8 +86,13 @@ export function saveProject(
   families: import("../shared/family").Family[] = [],
   content: Pick<
     import("zod").infer<typeof projectSchema>,
-    "dialogueGroups" | "dialogueLines" | "scenarios"
-  > = { dialogueGroups: [], dialogueLines: [], scenarios: [] },
+    "dialogueGroups" | "dialogueLines" | "scenarios" | "scenarioGuidelines"
+  > = {
+    dialogueGroups: [],
+    dialogueLines: [],
+    scenarios: [],
+    scenarioGuidelines: "",
+  },
 ) {
   localStorage.setItem(
     "farlands-empty-studio-project",
@@ -105,8 +110,14 @@ export function loadContent() {
       dialogueGroups: p.dialogueGroups,
       dialogueLines: p.dialogueLines,
       scenarios: p.scenarios,
+      scenarioGuidelines: p.scenarioGuidelines,
     };
   } catch {
-    return { dialogueGroups: [], dialogueLines: [], scenarios: [] };
+    return {
+      dialogueGroups: [],
+      dialogueLines: [],
+      scenarios: [],
+      scenarioGuidelines: "",
+    };
   }
 }

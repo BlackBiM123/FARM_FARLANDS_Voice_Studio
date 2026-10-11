@@ -22,6 +22,7 @@ import {
   type DialogueGroup,
   type Scenario,
 } from "../../shared/content";
+import { parseFacts } from "../../shared/scenario-mechanics";
 import type { NPC } from "../../shared/schema";
 import type { Take } from "../storage";
 const lines = defineModel<DialogueLine[]>({ required: true }),
@@ -819,7 +820,10 @@ function pauseOthers(e: Event) {
                         </option>
                       </select></label
                     ><label
-                      >Сценарий<select v-model="l.scenarioId">
+                      >Сценарий<select
+                        v-model="l.scenarioId"
+                        @change="l.outcomeIds = []"
+                      >
                         <option :value="null">Без сценария</option>
                         <option
                           v-for="s in scenarios"
@@ -856,6 +860,53 @@ function pauseOthers(e: Event) {
                         placeholder="Паузы, интонация, особенности сцены"
                       />
                     </label>
+                  </div>
+                  <div class="line-detail-grid">
+                    <label
+                      >Когда звучит<select v-model="l.moment">
+                        <option value="scene">В сцене</option>
+                        <option value="aftermath">
+                          После события / рассказ о последствиях
+                        </option>
+                        <option value="any">В сцене или после</option>
+                      </select></label
+                    ><label
+                      >Необходимые факты мира<input
+                        :value="l.requiredFacts.join(', ')"
+                        @change="
+                          l.requiredFacts = parseFacts(
+                            ($event.target as HTMLInputElement).value,
+                          )
+                        " /></label
+                    ><label
+                      >Что должен знать говорящий<input
+                        :value="l.knownFacts.join(', ')"
+                        @change="
+                          l.knownFacts = parseFacts(
+                            ($event.target as HTMLInputElement).value,
+                          )
+                        "
+                    /></label>
+                    <div v-if="l.scenarioId" class="wide-field effect-branches">
+                      <span
+                        >Реплика подходит к исходам · пусто = без ограничения по
+                        исходу</span
+                      >
+                      <div class="mechanic-checks">
+                        <label
+                          v-for="o in scenarios.find(
+                            (s) => s.id === l.scenarioId,
+                          )?.outcomes || []"
+                          :key="o.id"
+                          class="mechanic-check"
+                          ><input
+                            v-model="l.outcomeIds"
+                            type="checkbox"
+                            :value="o.id"
+                          />{{ o.label }}</label
+                        >
+                      </div>
+                    </div>
                   </div>
                   <button
                     v-if="l.scenarioId"

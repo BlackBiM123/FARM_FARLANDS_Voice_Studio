@@ -72,6 +72,7 @@ export const projectSchema = z
     dialogueGroups: z.array(dialogueGroupSchema).max(100).default([]),
     dialogueLines: z.array(dialogueLineSchema).max(2000).default([]),
     scenarios: z.array(scenarioSchema).max(500).default([]),
+    scenarioGuidelines: z.string().max(50000).default(""),
     families: z
       .array(familySchema)
       .max(100)

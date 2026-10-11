@@ -3,6 +3,10 @@ export { cloudClient } from "./supabase.js";
 import { z } from "zod";
 import { authorized, sameOrigin } from "./auth.js";
 import { projectSchema, takeMetadataSchema } from "../shared/schema.js";
+import {
+  needsMechanicsPreservation,
+  preserveMechanics,
+} from "./preserve-mechanics.js";
 const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 export async function cloudGuard(request: Request) {
@@ -96,6 +100,7 @@ export async function handleCloud(request: Request) {
       ].some((key) => rawProject[key] === undefined);
       if (
         missingContent ||
+        needsMechanicsPreservation(rawProject) ||
         incoming.some(
           (n) =>
             n.profile === undefined ||
@@ -164,6 +169,7 @@ export async function handleCloud(request: Request) {
                 parsed.data.project.npcs.some((n) => n.id === l.to),
             ),
           }));
+        preserveMechanics(old, parsed.data.project, rawProject);
         for (const n of parsed.data.project.npcs) {
           if (incoming.find((i) => i.id === n.id)?.sourceText === undefined)
             n.sourceText = old.npcs.find((i) => i.id === n.id)?.sourceText;

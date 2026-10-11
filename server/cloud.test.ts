@@ -75,6 +75,7 @@ it("rejects stale revisions instead of overwriting a newer cloud project", async
         dialogueGroups: [],
         dialogueLines: [],
         scenarios: [],
+        scenarioGuidelines: "",
       },
       revision: 4,
     }),

@@ -37,7 +37,8 @@ import { loadContent } from "./storage";
 const content = loadContent();
 const dialogueGroups = ref<DialogueGroup[]>(content.dialogueGroups),
   dialogueLines = ref<DialogueLine[]>(content.dialogueLines),
-  scenarios = ref<Scenario[]>(content.scenarios);
+  scenarios = ref<Scenario[]>(content.scenarios),
+  scenarioGuidelines = ref(content.scenarioGuidelines);
 import { loadFamilies } from "./storage";
 const families = ref(loadFamilies());
 import ImageHoverPreview from "./components/ImageHoverPreview.vue";
@@ -178,6 +179,7 @@ function snapshotProject() {
     dialogueGroups: dialogueGroups.value,
     dialogueLines: dialogueLines.value,
     scenarios: scenarios.value,
+    scenarioGuidelines: scenarioGuidelines.value,
   });
 }
 function rememberDirty(value: boolean) {
@@ -288,6 +290,7 @@ async function syncCloud(forceLoad = false) {
       dialogueGroups.value = data.project.dialogueGroups;
       dialogueLines.value = data.project.dialogueLines;
       scenarios.value = data.project.scenarios;
+      scenarioGuidelines.value = data.project.scenarioGuidelines;
       if (!npcs.value.some((n) => n.id === selected.value))
         selected.value = npcs.value[0]?.id ?? "";
       await nextTick();
@@ -465,7 +468,15 @@ const compared = computed(() =>
   takes.value.filter((t) => compare.value.includes(t.id)),
 );
 watch(
-  [npcs, gameCharacter, families, dialogueGroups, dialogueLines, scenarios],
+  [
+    npcs,
+    gameCharacter,
+    families,
+    dialogueGroups,
+    dialogueLines,
+    scenarios,
+    scenarioGuidelines,
+  ],
   () => {
     if (
       !projectSchema.safeParse({
@@ -476,6 +487,7 @@ watch(
         dialogueGroups: dialogueGroups.value,
         dialogueLines: dialogueLines.value,
         scenarios: scenarios.value,
+        scenarioGuidelines: scenarioGuidelines.value,
       }).success
     ) {
       cloudMessage.value =
@@ -487,6 +499,7 @@ watch(
         dialogueGroups: dialogueGroups.value,
         dialogueLines: dialogueLines.value,
         scenarios: scenarios.value,
+        scenarioGuidelines: scenarioGuidelines.value,
       });
     } catch {
       notice.value = "Не удалось сохранить кеш браузера. Экспортируйте JSON.";
@@ -542,6 +555,7 @@ function exportProject() {
             dialogueGroups: dialogueGroups.value,
             dialogueLines: dialogueLines.value,
             scenarios: scenarios.value,
+            scenarioGuidelines: scenarioGuidelines.value,
           },
           null,
           2,
@@ -567,6 +581,7 @@ async function importProject(e: Event) {
     dialogueGroups.value = data.dialogueGroups;
     dialogueLines.value = data.dialogueLines;
     scenarios.value = data.scenarios;
+    scenarioGuidelines.value = data.scenarioGuidelines;
     selected.value = data.npcs[0]?.id ?? "";
     notice.value = "Проект импортирован";
   } catch {
@@ -823,10 +838,32 @@ async function exportGodot() {
       version: 1,
       project: "FARM & FARLANDS",
       audio_format: "wav",
+      event_model: {
+        version: 1,
+        time_unit: "game_hours",
+        occurrence_states: [
+          "pending",
+          "playing",
+          "awaiting_resolution",
+          "resolved",
+          "cancelled",
+        ],
+        one_outcome_per_occurrence: true,
+        effect_ledger_key: "occurrence_id:effect_id",
+        effects_on_dialogue_playback: false,
+        speaker_knowledge_is_separate: true,
+        relationship_ranges: {
+          trust: [-100, 100],
+          affection: [-100, 100],
+          respect: [-100, 100],
+          tension: [0, 100],
+        },
+      },
       game_character: gameCharacter.value,
       npcs: npcs.value.map((n) => ({ ...n })),
       families: families.value,
       scenarios: scenarios.value,
+      scenarioGuidelines: scenarioGuidelines.value,
       dialogue_groups: dialogueGroups.value,
       dialogue_lines: dialogueLines.value.map((l) => ({
         ...l,
@@ -1127,6 +1164,7 @@ function pauseOthers(e: Event) {
     <StoryPage
       v-else-if="characterMode === 'stories' && projectLoaded"
       v-model="scenarios"
+      v-model:guidelines="scenarioGuidelines"
       :npcs="npcs"
       :lines="dialogueLines"
       :initial-id="characterHash.split('/')[2]"

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import ScenarioMechanics from "./ScenarioMechanics.vue";
+import { parseFacts } from "../../shared/scenario-mechanics";
 import { Plus, GripVertical, Trash2, ArrowRight } from "lucide-vue-next";
 import {
   scenarioSchema,
@@ -14,6 +16,7 @@ import {
 } from "../../shared/content";
 import type { NPC } from "../../shared/schema";
 const scenarios = defineModel<Scenario[]>({ required: true });
+const guidelines = defineModel<string>("guidelines", { default: "" });
 const props = defineProps<{
   npcs: NPC[];
   lines: DialogueLine[];
@@ -103,6 +106,8 @@ function addEffect(s: Scenario) {
     metric: "trust",
     delta: 0,
     note: "",
+    outcomeIds: [],
+    requiredFacts: [],
   });
 }
 function baseline(effect: Scenario["effects"][number]) {
@@ -136,9 +141,28 @@ function duplicate(s: Scenario) {
   if (scenarios.value.length >= 500) return;
   const clone = JSON.parse(JSON.stringify(s)) as Scenario;
   clone.id = crypto.randomUUID();
+  clone.key = s.key ? "scenario_" + clone.id.slice(0, 8) : "";
   clone.title = (s.title + " · копия").slice(0, 120);
   clone.state = "draft";
-  clone.effects = clone.effects.map((e) => ({ ...e, id: crypto.randomUUID() }));
+  const outcomeIds = new Map(
+    clone.outcomes.map((o) => [o.id, crypto.randomUUID()]),
+  );
+  clone.outcomes = clone.outcomes.map((o) => ({
+    ...o,
+    id: outcomeIds.get(o.id)!,
+  }));
+  clone.effects = clone.effects.map((e) => ({
+    ...e,
+    id: crypto.randomUUID(),
+    outcomeIds: e.outcomeIds.map((id) => outcomeIds.get(id)!).filter(Boolean),
+  }));
+  clone.obligations = clone.obligations.map((o) => ({
+    ...o,
+    id: crypto.randomUUID(),
+    createdByOutcomeId: o.createdByOutcomeId
+      ? (outcomeIds.get(o.createdByOutcomeId) ?? null)
+      : null,
+  }));
   scenarios.value = [...scenarios.value, clone];
   selected.value = clone.id;
   message.value = "Копия создана без привязки старых реплик.";
@@ -163,6 +187,19 @@ function duplicate(s: Scenario) {
         </button>
       </div>
     </div>
+    <details v-if="guidelines" class="panel group-manager">
+      <summary>Общие правила механики и исходные замечания</summary>
+      <textarea
+        v-model="guidelines"
+        maxlength="50000"
+        rows="10"
+        aria-label="Общие правила сценариев"
+      />
+      <p class="hint">
+        Рабочие предложения из исходного документа. Студия сохраняет настройки и
+        проверяет модель; игровую симуляцию нужно подключить в Godot.
+      </p>
+    </details>
     <div class="content-toolbar panel">
       <label
         >Вид сценария<select v-model="kind">
@@ -305,7 +342,7 @@ function duplicate(s: Scenario) {
               </option>
             </select></label
           ><label
-            >Состояние сценария<select v-model="current.state">
+            >Статус карточки<select v-model="current.state">
               <option
                 v-for="state in scenarioStates"
                 :key="state"
@@ -454,6 +491,12 @@ function duplicate(s: Scenario) {
           </label>
         </div>
       </section>
+      <ScenarioMechanics
+        :key="current.id"
+        :scenario="current"
+        :npcs="npcs"
+        :lines="lines"
+      />
       <section class="story-section">
         <div class="section-heading">
           <div>
@@ -510,8 +553,36 @@ function duplicate(s: Scenario) {
               current.effects = current.effects.filter((x) => x.id !== e.id)
             "
           >
-            <Trash2 :size="16" /></button
-          ><label class="wide-field"
+            <Trash2 :size="16" />
+          </button>
+          <div class="wide-field effect-branches">
+            <span>Применяется только при исходах:</span>
+            <div class="mechanic-checks">
+              <label
+                v-for="branch in current.outcomes"
+                :key="branch.id"
+                class="mechanic-check"
+                ><input
+                  v-model="e.outcomeIds"
+                  type="checkbox"
+                  :value="branch.id"
+                />{{ branch.label }}</label
+              >
+            </div>
+            <small v-if="!e.outcomeIds.length" class="audio-warning"
+              >Исход не выбран — автоматическое начисление выключено.</small
+            >
+          </div>
+          <label class="wide-field"
+            >Подтверждённые факты для этого последствия<input
+              :value="e.requiredFacts.join(', ')"
+              @change="
+                e.requiredFacts = parseFacts(
+                  ($event.target as HTMLInputElement).value,
+                )
+              "
+          /></label>
+          <label class="wide-field"
             >Когда применяется / примечание<input
               v-model="e.note"
               maxlength="500"
@@ -528,9 +599,7 @@ function duplicate(s: Scenario) {
           <div>
             <h4>Реплики сценария</h4>
             <p class="hint">
-              {{
-                lines.filter((l) => l.scenarioId === current!.id).length
-              }}
+              {{ lines.filter((l) => l.scenarioId === current!.id).length }}
               реплик привязано. Одна реплика может переиспользовать готовый
               аудиодубль.
             </p>
@@ -556,6 +625,15 @@ function duplicate(s: Scenario) {
           ><small>{{ l.key }}</small>
         </div>
       </section>
+      <details v-if="current.sourceText" class="story-section">
+        <summary>Исходный сценарий и реплики · черновик</summary>
+        <textarea
+          v-model="current.sourceText"
+          maxlength="50000"
+          rows="10"
+          aria-label="Исходный текст сценария"
+        />
+      </details>
     </article>
     <p v-else-if="scenarios.length" class="panel content-empty">
       Выберите карточку на доске, чтобы редактировать сценарий.
