@@ -30,6 +30,11 @@ export function needsMechanicsPreservation(raw: Raw) {
           (e) => e.outcomeIds === undefined || e.requiredFacts === undefined,
         ),
     ) ||
+    (raw.scenarios ?? []).some((s) =>
+      ((s.obligations as Record<string, unknown>[]) ?? []).some(
+        (o) => o.createdFact === undefined,
+      ),
+    ) ||
     (raw.dialogueLines ?? []).some((l) =>
       lineFields.some((k) => l[k] === undefined),
     )
@@ -46,6 +51,14 @@ export function preserveMechanics(old: Project, next: Project, raw: Raw) {
     if (input.outcomes === undefined) s.outcomes = previous.outcomes;
     if (input.facts === undefined) s.facts = previous.facts;
     if (input.obligations === undefined) s.obligations = previous.obligations;
+    for (const o of s.obligations) {
+      const value = (
+        input.obligations as Record<string, unknown>[] | undefined
+      )?.find((x) => x.id === o.id);
+      if (value && value.createdFact === undefined)
+        o.createdFact =
+          previous.obligations.find((x) => x.id === o.id)?.createdFact ?? "";
+    }
     if (input.sourceText === undefined) s.sourceText = previous.sourceText;
     if (input.key === undefined) s.key = previous.key;
     for (const e of s.effects) {

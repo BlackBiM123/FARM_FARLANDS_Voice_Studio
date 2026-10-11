@@ -88,6 +88,7 @@ export const obligationSchema = z.object({
   fromId: npcId.nullable().default(null),
   toId: npcId.nullable().default(null),
   createdByOutcomeId: z.string().uuid().nullable().default(null),
+  createdFact: factKey.or(z.literal("")).default(""),
   fulfilledFact: factKey.or(z.literal("")).default(""),
   brokenFact: factKey.or(z.literal("")).default(""),
   dueDays: z.number().min(0).max(365).nullable().default(null),

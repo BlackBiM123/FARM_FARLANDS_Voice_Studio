@@ -398,6 +398,10 @@ function toggleFact(key: string) {
                   : Number(($event.target as HTMLInputElement).value)
             " /></label
         ><label
+          >Факт данного обещания<input
+            v-model="o.createdFact"
+            maxlength="100" /></label
+        ><label
           >Факт выполнения<input
             v-model="o.fulfilledFact"
             maxlength="100" /></label
