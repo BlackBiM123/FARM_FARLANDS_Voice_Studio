@@ -8,6 +8,7 @@ import { handleVoices } from "./server/voices.js";
 import { handleImage } from "./server/image.js";
 import { handleAudio } from "./server/audio.js";
 import { handleUsers } from "./server/users.js";
+import { handleModels } from "./server/models.js";
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -36,6 +37,7 @@ export default defineConfig(({ mode }) => {
             "users",
             "image",
             "voices",
+            "models",
           ])
             server.middlewares.use("/api/" + route, async (req, res) => {
               try {
@@ -85,6 +87,7 @@ export default defineConfig(({ mode }) => {
                   image: handleImage,
                   voices: handleVoices,
                   users: handleUsers,
+                  models: handleModels,
                 }[route]!(request);
                 res.statusCode = response.status;
                 response.headers.forEach((v, k) => res.setHeader(k, v));
