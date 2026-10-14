@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
+const host = ref<HTMLElement | string>("body");
 const preview = ref<{
   src: string;
   alt: string;
@@ -18,21 +19,24 @@ function enter(event: PointerEvent) {
     )
   )
     return;
+  host.value = target.closest("dialog") || "body";
   const box = target.getBoundingClientRect(),
     margin = 12,
     gap = 18;
-  const maxWidth = Math.min(320, window.innerWidth - margin * 2),
-    maxHeight = Math.min(420, window.innerHeight - margin * 2);
+  const bounds = target.closest("dialog")?.getBoundingClientRect();
+  const leftBound = bounds ? bounds.left + margin : margin,
+    rightBound = bounds ? bounds.right - margin : window.innerWidth - margin,
+    topBound = bounds ? bounds.top + margin : margin,
+    bottomBound = bounds ? bounds.bottom - margin : window.innerHeight - margin;
+  const maxWidth = Math.min(320, rightBound - leftBound),
+    maxHeight = Math.min(420, bottomBound - topBound);
   const ratio = (target.naturalWidth || 1) / (target.naturalHeight || 1);
   const width = Math.min(maxWidth, (maxHeight - 48) * ratio + 24),
     height = Math.min(maxHeight, (width - 24) / ratio + 48);
   let x = box.right + gap;
-  if (x + width > window.innerWidth - margin) x = box.left - width - gap;
-  x = Math.max(margin, Math.min(x, window.innerWidth - width - margin));
-  const y = Math.max(
-    margin,
-    Math.min(box.top, window.innerHeight - height - margin),
-  );
+  if (x + width > rightBound) x = box.left - width - gap;
+  x = Math.max(leftBound, Math.min(x, rightBound - width));
+  const y = Math.max(topBound, Math.min(box.top, bottomBound - height));
   preview.value = {
     src: target.currentSrc || target.src,
     alt: target.alt || "Изображение персонажа",
@@ -67,7 +71,7 @@ onUnmounted(() => {
 });
 </script>
 <template>
-  <Teleport to="body"
+  <Teleport :to="host"
     ><div
       v-if="preview"
       class="image-hover-preview"

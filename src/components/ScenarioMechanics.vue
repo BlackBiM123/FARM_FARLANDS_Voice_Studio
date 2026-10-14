@@ -24,7 +24,10 @@ const props = defineProps<{
   scenario: Scenario;
   npcs: NPC[];
   lines: DialogueLine[];
+  view?: string;
 }>();
+const openOutcome = ref(""),
+  openObligation = ref("");
 const message = ref(""),
   outcomeId = ref(""),
   confirmedFacts = ref<string[]>([]),
@@ -47,6 +50,7 @@ function addFact() {
 function addOutcome() {
   if (props.scenario.outcomes.length >= 20) return;
   const id = crypto.randomUUID();
+  openOutcome.value = id;
   props.scenario.outcomes.push(
     outcomeSchema.parse({
       id,
@@ -71,6 +75,7 @@ function removeOutcome(id: string) {
 function addObligation() {
   if (props.scenario.obligations.length >= 20) return;
   const id = crypto.randomUUID();
+  openObligation.value = id;
   props.scenario.obligations.push(
     obligationSchema.parse({
       id,
@@ -144,7 +149,11 @@ function toggleFact(key: string) {
 }
 </script>
 <template>
-  <section class="story-section scenario-mechanics">
+  <section
+    v-show="!view || view === 'timing'"
+    id="scenario-panel-timing"
+    class="story-section scenario-mechanics"
+  >
     <h4>Жизненный цикл и время события</h4>
     <p class="hint">
       Событие ожидает дни, а сцена проводится в подходящие часы. Статус карточки
@@ -212,80 +221,92 @@ function toggleFact(key: string) {
           v-model="scenario.mechanics.playerCanIntervene"
           type="checkbox"
         />Игрок может вмешаться</label
-      ><label class="wide-field"
-        >Что происходит без игрока<textarea
-          v-model="scenario.mechanics.autonomousResolution"
-          maxlength="1500"
-          rows="3"
-        /></label
-      ><label class="wide-field"
-        >Когда событие теряет актуальность<textarea
-          v-model="scenario.mechanics.invalidation"
-          maxlength="1500"
-          rows="3"
-        /></label
-      ><label
-        >Повтор события<select v-model="scenario.mechanics.repeatPolicy">
-          <option v-for="v in repeatPolicies" :key="v" :value="v">
-            {{ repeatPolicyLabels[v] }}
-          </option>
-        </select></label
-      ><label
-        >Повторное обсуждение не раньше, часов<input
-          v-model.number="scenario.mechanics.followUpCooldownHours"
-          type="number"
-          min="0"
-          max="8760" /></label
-      ><label class="wide-field"
-        >Что отличает новую ситуацию<textarea
-          v-model="scenario.mechanics.contextKeySpec"
-          maxlength="1000"
-          rows="2"
-          placeholder="Новая партия урожая, запись дневника, план производства…"
-        /></label
-      ><label
-        >Ключи взаимоисключения<input
-          :value="scenario.mechanics.exclusivityKeys.join(', ')"
-          @change="
-            scenario.mechanics.exclusivityKeys = parseFacts(
-              ($event.target as HTMLInputElement).value,
-            )
-          " /></label
-      ><label
-        >Пауза между наблюдаемыми сценами, часов<input
-          v-model.number="scenario.mechanics.sceneGapHours"
-          type="number"
-          min="0"
-          max="8760"
-      /></label>
-    </div>
-    <h5>Когда повторно проверять возможность сцены</h5>
-    <div class="mechanic-checks">
-      <label v-for="v in recheckEvents" :key="v" class="mechanic-check"
-        ><input
-          v-model="scenario.mechanics.recheckOn"
-          type="checkbox"
-          :value="v"
-        />{{ recheckLabels[v] }}</label
       >
     </div>
-    <div class="story-field-grid">
-      <label class="wide-field"
-        >Следы события и разговоры после возвращения игрока<textarea
-          v-model="scenario.mechanics.aftermath"
-          maxlength="1500"
-          rows="3"
-        /></label
-      ><label class="wide-field"
-        >Замечания к механике / рабочие параметры<textarea
-          v-model="scenario.mechanics.notes"
-          maxlength="2500"
-          rows="4"
-        />
-      </label>
-    </div>
+    <details class="mechanics-advanced">
+      <summary>
+        Дополнительные настройки: повтор, автономность и условия
+      </summary>
+      <div class="story-field-grid">
+        <label class="wide-field"
+          >Что происходит без игрока<textarea
+            v-model="scenario.mechanics.autonomousResolution"
+            maxlength="1500"
+            rows="3"
+          /></label
+        ><label class="wide-field"
+          >Когда событие теряет актуальность<textarea
+            v-model="scenario.mechanics.invalidation"
+            maxlength="1500"
+            rows="3"
+          /></label
+        ><label
+          >Повтор события<select v-model="scenario.mechanics.repeatPolicy">
+            <option v-for="v in repeatPolicies" :key="v" :value="v">
+              {{ repeatPolicyLabels[v] }}
+            </option>
+          </select></label
+        ><label
+          >Повторное обсуждение не раньше, часов<input
+            v-model.number="scenario.mechanics.followUpCooldownHours"
+            type="number"
+            min="0"
+            max="8760" /></label
+        ><label class="wide-field"
+          >Что отличает новую ситуацию<textarea
+            v-model="scenario.mechanics.contextKeySpec"
+            maxlength="1000"
+            rows="2"
+            placeholder="Новая партия урожая, запись дневника, план производства…"
+          /></label
+        ><label
+          >Ключи взаимоисключения<input
+            :value="scenario.mechanics.exclusivityKeys.join(', ')"
+            @change="
+              scenario.mechanics.exclusivityKeys = parseFacts(
+                ($event.target as HTMLInputElement).value,
+              )
+            " /></label
+        ><label
+          >Пауза между наблюдаемыми сценами, часов<input
+            v-model.number="scenario.mechanics.sceneGapHours"
+            type="number"
+            min="0"
+            max="8760"
+        /></label>
+      </div>
+      <h5>Когда повторно проверять возможность сцены</h5>
+      <div class="mechanic-checks">
+        <label v-for="v in recheckEvents" :key="v" class="mechanic-check"
+          ><input
+            v-model="scenario.mechanics.recheckOn"
+            type="checkbox"
+            :value="v"
+          />{{ recheckLabels[v] }}</label
+        >
+      </div>
+      <div class="story-field-grid">
+        <label class="wide-field"
+          >Следы события и разговоры после возвращения игрока<textarea
+            v-model="scenario.mechanics.aftermath"
+            maxlength="1500"
+            rows="3"
+          /></label
+        ><label class="wide-field"
+          >Замечания к механике / рабочие параметры<textarea
+            v-model="scenario.mechanics.notes"
+            maxlength="2500"
+            rows="4"
+          />
+        </label>
+      </div>
+    </details>
   </section>
-  <section class="story-section">
+  <section
+    v-show="!view || view === 'outcomes'"
+    id="scenario-panel-outcomes"
+    class="story-section"
+  >
     <div class="section-heading">
       <div>
         <h4>Отдельные исходы</h4>
@@ -298,44 +319,61 @@ function toggleFact(key: string) {
         Добавить исход
       </button>
     </div>
-    <article v-for="o in scenario.outcomes" :key="o.id" class="outcome-card">
-      <div class="story-field-grid">
-        <label
-          >Название исхода<input
-            v-model="o.label"
-            maxlength="150"
-            @blur="o.label = o.label.trim() || 'Без названия'" /></label
-        ><label>Ключ исхода<input v-model="o.key" maxlength="100" /></label
-        ><label class="wide-field"
-          >Описание исхода<textarea
-            v-model="o.description"
-            maxlength="1500"
-            rows="2"
-          /></label
-        ><label
-          >Условия подтверждения<textarea
-            v-model="o.conditions"
-            maxlength="1000"
-            rows="2"
-          /></label
-        ><label
-          >Необходимые подтверждённые факты<input
-            :value="o.requiredFacts.join(', ')"
-            @change="
-              o.requiredFacts = parseFacts(
-                ($event.target as HTMLInputElement).value,
-              )
-            "
-        /></label>
+    <details
+      v-for="o in scenario.outcomes"
+      :key="o.id"
+      name="scenario-outcomes"
+      class="outcome-card mechanics-accordion"
+      :open="openOutcome === o.id"
+    >
+      <summary>
+        {{ o.label }}<small>{{ o.key }}</small>
+      </summary>
+      <div class="accordion-fields">
+        <div class="story-field-grid">
+          <label
+            >Название исхода<input
+              v-model="o.label"
+              maxlength="150"
+              @blur="o.label = o.label.trim() || 'Без названия'" /></label
+          ><label>Ключ исхода<input v-model="o.key" maxlength="100" /></label
+          ><label class="wide-field"
+            >Описание исхода<textarea
+              v-model="o.description"
+              maxlength="1500"
+              rows="2"
+            /></label
+          ><label
+            >Условия подтверждения<textarea
+              v-model="o.conditions"
+              maxlength="1000"
+              rows="2"
+            /></label
+          ><label
+            >Необходимые подтверждённые факты<input
+              :value="o.requiredFacts.join(', ')"
+              @change="
+                o.requiredFacts = parseFacts(
+                  ($event.target as HTMLInputElement).value,
+                )
+              "
+          /></label>
+        </div>
+        <button class="danger" @click="removeOutcome(o.id)">
+          Удалить исход
+        </button>
       </div>
-      <button class="danger" @click="removeOutcome(o.id)">Удалить исход</button>
-    </article>
+    </details>
     <p v-if="!scenario.outcomes.length" class="hint">
       Исходов пока нет. Последствия без привязки к исходу не применяются
       автоматически.
     </p>
   </section>
-  <section class="story-section">
+  <section
+    v-show="!view || view === 'memory'"
+    id="scenario-panel-memory"
+    class="story-section"
+  >
     <div class="section-heading">
       <div>
         <h4>Обещания и обязательства</h4>
@@ -351,93 +389,116 @@ function toggleFact(key: string) {
         Добавить обязательство
       </button>
     </div>
-    <article v-for="o in scenario.obligations" :key="o.id" class="outcome-card">
-      <div class="story-field-grid">
-        <label
-          >Обещание / обязательство<input
-            v-model="o.title"
-            maxlength="150"
-            @blur="o.title = o.title.trim() || 'Без названия'" /></label
-        ><label
-          >Ключ обязательства<input v-model="o.key" maxlength="100" /></label
-        ><label
-          >Кто обещал<select v-model="o.fromId">
-            <option :value="null">Не выбран</option>
-            <option v-for="n in npcs" :key="n.id" :value="n.id">
-              {{ n.name }}
-            </option>
-          </select></label
-        ><label
-          >Кому обещал<select v-model="o.toId">
-            <option :value="null">Не выбран</option>
-            <option v-for="n in npcs" :key="n.id" :value="n.id">
-              {{ n.name }}
-            </option>
-          </select></label
-        ><label
-          >Создаётся при исходе<select v-model="o.createdByOutcomeId">
-            <option :value="null">Пока не привязано</option>
-            <option
-              v-for="branch in scenario.outcomes"
-              :key="branch.id"
-              :value="branch.id"
-            >
-              {{ branch.label }}
-            </option>
-          </select></label
-        ><label
-          >Срок, дней · пусто, если не определён<input
-            v-model.number="o.dueDays"
-            type="number"
-            min="0"
-            max="365"
-            @change="
-              o.dueDays =
-                ($event.target as HTMLInputElement).value === ''
-                  ? null
-                  : Number(($event.target as HTMLInputElement).value)
-            " /></label
-        ><label
-          >Факт данного обещания<input
-            v-model="o.createdFact"
-            maxlength="100" /></label
-        ><label
-          >Факт выполнения<input
-            v-model="o.fulfilledFact"
-            maxlength="100" /></label
-        ><label
-          >Факт нарушения<input v-model="o.brokenFact" maxlength="100" /></label
-        ><label class="wide-field"
-          >Перенос, условия и примечания<textarea
-            v-model="o.notes"
-            maxlength="1000"
-            rows="2"
-          />
-        </label>
+    <details
+      v-for="o in scenario.obligations"
+      :key="o.id"
+      name="scenario-obligations"
+      class="outcome-card mechanics-accordion"
+      :open="openObligation === o.id"
+    >
+      <summary>
+        {{ o.title
+        }}<small
+          >{{ npcs.find((n) => n.id === o.fromId)?.name }} →
+          {{ npcs.find((n) => n.id === o.toId)?.name }}</small
+        >
+      </summary>
+      <div class="accordion-fields">
+        <div class="story-field-grid">
+          <label
+            >Обещание / обязательство<input
+              v-model="o.title"
+              maxlength="150"
+              @blur="o.title = o.title.trim() || 'Без названия'" /></label
+          ><label
+            >Ключ обязательства<input v-model="o.key" maxlength="100" /></label
+          ><label
+            >Кто обещал<select v-model="o.fromId">
+              <option :value="null">Не выбран</option>
+              <option v-for="n in npcs" :key="n.id" :value="n.id">
+                {{ n.name }}
+              </option>
+            </select></label
+          ><label
+            >Кому обещал<select v-model="o.toId">
+              <option :value="null">Не выбран</option>
+              <option v-for="n in npcs" :key="n.id" :value="n.id">
+                {{ n.name }}
+              </option>
+            </select></label
+          ><label
+            >Создаётся при исходе<select v-model="o.createdByOutcomeId">
+              <option :value="null">Пока не привязано</option>
+              <option
+                v-for="branch in scenario.outcomes"
+                :key="branch.id"
+                :value="branch.id"
+              >
+                {{ branch.label }}
+              </option>
+            </select></label
+          ><label
+            >Срок, дней · пусто, если не определён<input
+              v-model.number="o.dueDays"
+              type="number"
+              min="0"
+              max="365"
+              @change="
+                o.dueDays =
+                  ($event.target as HTMLInputElement).value === ''
+                    ? null
+                    : Number(($event.target as HTMLInputElement).value)
+              " /></label
+          ><label
+            >Факт данного обещания<input
+              v-model="o.createdFact"
+              maxlength="100" /></label
+          ><label
+            >Факт выполнения<input
+              v-model="o.fulfilledFact"
+              maxlength="100" /></label
+          ><label
+            >Факт нарушения<input
+              v-model="o.brokenFact"
+              maxlength="100" /></label
+          ><label class="wide-field"
+            >Перенос, условия и примечания<textarea
+              v-model="o.notes"
+              maxlength="1000"
+              rows="2"
+            />
+          </label>
+        </div>
+        <button
+          class="danger"
+          @click="
+            scenario.obligations = scenario.obligations.filter(
+              (x) => x.id !== o.id,
+            )
+          "
+        >
+          Удалить обязательство
+        </button>
       </div>
-      <button
-        class="danger"
-        @click="
-          scenario.obligations = scenario.obligations.filter(
-            (x) => x.id !== o.id,
-          )
-        "
-      >
-        Удалить обязательство
-      </button>
-    </article>
+    </details>
   </section>
-  <details class="story-section fact-catalog">
+  <details
+    v-show="!view || view === 'memory'"
+    class="story-section fact-catalog"
+  >
     <summary>Факты и память · {{ scenario.facts.length }}</summary>
     <p class="hint">
       Факт мира и знание персонажа о нём различаются. Названия описывают смысл,
       ключи связывают проверку с игрой.
     </p>
-    <div
+    <details
       v-for="f in scenario.facts"
       :key="f.key"
-      class="outcome-card story-field-grid"
+      class="outcome-card mechanics-accordion"
+      name="scenario-facts"
     >
+      <summary>{{ f.label || 'Без названия' }} <small>{{ f.key }}</small></summary>
+      <div class="accordion-fields story-field-grid">
       <label
         >Название факта<input
           v-model="f.label"
@@ -451,13 +512,18 @@ function toggleFact(key: string) {
           rows="2"
         />
       </label>
-    </div>
+      </div>
+    </details>
     <button :disabled="scenario.facts.length >= 100" @click="addFact">
       Добавить факт
     </button>
   </details>
-  <details class="story-section preview-mechanics">
-    <summary>Проверить последствия исхода · без изменения анкет</summary>
+  <section
+    v-show="!view || view === 'preview'"
+    id="scenario-panel-preview"
+    class="story-section preview-mechanics"
+  >
+    <h4>Проверить последствия исхода · без изменения анкет</h4>
     <p class="hint">
       Отметьте факты, которые действительно наступили. Повторное подтверждение
       проверяет защиту от двойного начисления; чтение и прослушивание реплик
@@ -489,5 +555,5 @@ function toggleFact(key: string) {
     <small
       >В журнале проверки: {{ ledger.length }} применённых последствий.</small
     >
-  </details>
+  </section>
 </template>

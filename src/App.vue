@@ -1165,6 +1165,7 @@ function pauseOthers(e: Event) {
       v-else-if="characterMode === 'stories' && projectLoaded"
       v-model="scenarios"
       v-model:guidelines="scenarioGuidelines"
+      :save-status="cloudWorking ? 'Сохраняется…' : cloudMessage"
       :npcs="npcs"
       :lines="dialogueLines"
       :initial-id="characterHash.split('/')[2]"

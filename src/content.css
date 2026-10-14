@@ -860,3 +860,274 @@ nav {
   width: 100%;
   margin-top: 18px;
 }
+body.scenario-modal-open {
+  overflow: hidden;
+}
+.scenario-modal {
+  width: min(1120px, calc(100vw - 40px));
+  height: min(90dvh, 900px);
+  max-width: none;
+  max-height: 94dvh;
+  padding: 0;
+  border: 1px solid #49515b;
+  border-radius: 14px;
+  background: #181e25;
+  color: #e4e1d8;
+  overflow: hidden;
+  box-shadow: 0 28px 100px #000a;
+}
+.scenario-modal::backdrop {
+  background: #050a12c9;
+  backdrop-filter: blur(5px);
+}
+.scenario-modal .story-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #181e25;
+}
+.scenario-modal-header {
+  flex: none;
+  margin: 0;
+  padding: 20px 60px 18px 22px !important;
+  border-bottom: 1px solid #343f4c;
+  position: relative;
+}
+.scenario-modal-header h3 {
+  font-size: 21px;
+  margin: 7px 0 0;
+  line-height: 1.35;
+}
+.scenario-modal-header .eyebrow {
+  font-size: 10px;
+}
+.scenario-modal-header .story-create-actions button {
+  font-size: 12px;
+  padding: 8px 10px;
+}
+.scenario-modal-header .modal-close {
+  position: absolute;
+  right: 16px;
+  top: 17px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.scenario-modal-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #34404c;
+  background: #111820;
+  flex: none;
+}
+.scenario-modal-tabs button {
+  font-size: 12px;
+  padding: 8px 11px;
+  background: transparent;
+  border-color: transparent;
+  white-space: nowrap;
+}
+.scenario-modal-tabs button.chosen {
+  color: #f1c776;
+  background: #efc47117;
+  border-color: #ad85434d;
+}
+.scenario-modal-body {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  padding: 22px;
+  overscroll-behavior: contain;
+}
+.scenario-modal-body .story-section {
+  padding: 0;
+  margin: 0 0 20px;
+  border: 0;
+}
+.scenario-modal-body .story-section h4 {
+  margin: 0 0 14px;
+  font-size: 17px;
+}
+.scenario-modal-body .story-field-grid {
+  gap: 16px;
+}
+.scenario-modal-body label {
+  font-size: 12px;
+  gap: 6px;
+}
+.scenario-modal-body textarea {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.scenario-modal-body .hint {
+  margin: 8px 0 16px;
+  font-size: 12px;
+}
+.scenario-modal-body .interaction-people {
+  margin: 16px 0;
+  padding: 12px;
+}
+.scenario-modal-body .interaction-people img {
+  width: 44px;
+  height: 52px;
+}
+.scenario-modal-body .participant-picker {
+  gap: 8px;
+  margin: 14px 0;
+}
+.scenario-modal-body .participant-picker label {
+  padding: 8px 10px;
+}
+.scenario-modal-body .event-phase-strip {
+  margin: 14px 0;
+  gap: 8px;
+  font-size: 12px;
+}
+.scenario-modal-body .event-phase-strip span {
+  padding: 8px 12px;
+}
+.scenario-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 22px;
+  border-top: 1px solid #34404c;
+  background: #121922;
+  flex: none;
+}
+.scenario-modal-footer small {
+  color: #adae9f;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.scenario-modal-footer button {
+  padding: 9px 20px;
+}
+.mechanics-accordion,
+.scenario-modal .effect-accordion {
+  padding: 0;
+  margin: 12px 0;
+  display: block;
+}
+.mechanics-accordion > summary,
+.effect-accordion > summary {
+  cursor: pointer;
+  padding: 15px 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #dec391;
+}
+.mechanics-accordion > summary small {
+  display: block;
+  font-weight: 400;
+  color: #8794a3;
+  font-size: 11px;
+  margin: 4px 0 0 17px;
+}
+.effect-accordion > summary span {
+  float: right;
+  font-size: 12px;
+  font-weight: 500;
+  color: #e4c894;
+  padding-left: 16px;
+}
+.accordion-fields {
+  padding: 0 18px 18px;
+  border-top: 1px solid #35414d;
+}
+.accordion-fields > .story-field-grid {
+  margin-top: 16px;
+}
+.accordion-fields > button {
+  margin-top: 14px;
+}
+.effect-fields {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 1fr 0.6fr 0.8fr auto;
+  gap: 14px;
+  align-items: end;
+  padding: 18px;
+  border-top: 1px solid #35414d;
+}
+.mechanics-advanced {
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px solid #35414d;
+  border-radius: 8px;
+  background: #111820;
+}
+.mechanics-advanced > summary {
+  cursor: pointer;
+  color: #d7bc8c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mechanics-advanced > .story-field-grid {
+  margin-top: 18px;
+}
+.scenario-modal .preview-mechanics .content-message {
+  margin: 16px 0;
+  padding: 12px 14px;
+}
+@media (max-width: 760px) {
+  .scenario-modal {
+    width: calc(100vw - 20px);
+    height: 94dvh;
+    max-height: 96dvh;
+    border-radius: 10px;
+  }
+  .scenario-modal-header {
+    padding: 15px 48px 14px 16px !important;
+  }
+  .scenario-modal-header h3 {
+    font-size: 18px;
+  }
+  .scenario-modal-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 8px 10px;
+  }
+  .scenario-modal-tabs button {
+    flex: none;
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+  .scenario-modal-body {
+    padding: 16px;
+  }
+  .scenario-modal-footer {
+    padding: 10px 16px;
+  }
+  .effect-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .effect-accordion > summary span {
+    float: none;
+    display: block;
+    padding: 4px 0 0 18px;
+  }
+  .scenario-modal-body .story-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 550px) {
+  .scenario-modal-body .story-field-grid {
+    grid-template-columns: 1fr;
+  }
+  .scenario-modal-header .story-create-actions {
+    gap: 6px;
+  }
+  .scenario-modal-body .participant-picker label {
+    font-size: 12px;
+  }
+  .scenario-modal-body .event-phase-strip {
+    display: none;
+  }
+}

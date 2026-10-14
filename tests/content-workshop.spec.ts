@@ -114,20 +114,25 @@ test("bilingual dialogue, audio reuse, drag groups, conflicts and clean-browser 
     .click();
   await page.getByRole("button", { name: "Конфликт", exact: true }).click();
   await page.getByLabel("Название сценария").fill("Ферма или путешествие");
+  await page.getByRole("tab", { name: "Участники", exact: true }).click();
   await page.getByLabel("Лео Вейл", { exact: true }).check();
+  await page.getByRole("tab", { name: "Ситуация", exact: true }).click();
   await page
     .getByLabel("Причина / столкновение интересов")
     .fill("Лео хочет уйти в путешествие, Мартину нужна помощь на ферме.");
   await page
     .getByLabel("Событие-триггер")
     .fill("Лео объявляет о своём решении.");
+  await page.getByRole("tab", { name: "Развитие", exact: true }).click();
   await page
     .getByLabel("Влияние игрока / варианты вмешательства")
     .fill("Помочь договориться об отъезде после сбора урожая.");
+  await page.getByRole("tab", { name: "Отношения", exact: true }).click();
   await page
     .getByRole("button", { name: "Добавить последствие", exact: true })
     .click();
   await page.getByLabel("Изменение", { exact: true }).fill("-15");
+  await page.getByRole("tab", { name: "Реплики", exact: true }).click();
   await page
     .getByRole("button", { name: "Реплика инициатора", exact: true })
     .click();

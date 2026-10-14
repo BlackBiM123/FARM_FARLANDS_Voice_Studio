@@ -100,16 +100,14 @@ test("event time windows and fact-confirmed outcomes survive editing; preview do
     return r.fulfill({ json: { revision } });
   });
   await page.goto("/#/stories/" + scenarioId);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("tab", { name: "Время и запуск", exact: true }).click();
   await page.getByLabel("Окно актуальности: минимум дней").fill("7");
   await page.getByLabel("Окно актуальности: максимум дней").fill("10");
   await expect
     .poll(() => project.scenarios[0]?.mechanics.windowDaysMax)
     .toBe(10);
-  await page
-    .getByText("Проверить последствия исхода · без изменения анкет", {
-      exact: true,
-    })
-    .click();
+  await page.getByRole("tab", { name: "Проверка", exact: true }).click();
   await page.getByLabel("Исход для проверки").selectOption(outcomeId);
   await page.getByLabel("Обещание дано", { exact: true }).check();
   await page
@@ -132,12 +130,40 @@ test("event time windows and fact-confirmed outcomes survive editing; preview do
   );
   expect(project.npcs[0]!.profile.relationships[0]!.trust).toBe(70);
   await page.reload();
+  await page.getByRole("tab", { name: "Время и запуск", exact: true }).click();
   await expect(page.getByLabel("Окно актуальности: максимум дней")).toHaveValue(
     "10",
   );
+  await page.getByRole("tab", { name: "Память", exact: true }).click();
+  await page
+    .locator(".mechanics-accordion[name=scenario-obligations] summary")
+    .click();
   await expect(page.getByLabel("Факт выполнения")).toHaveValue("walk_done");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+  expect(
+    await page
+      .getByRole("dialog")
+      .evaluate((e) => e.getBoundingClientRect().height),
+  ).toBeLessThanOrEqual(844);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    await page
+      .locator("body")
+      .evaluate((e) => e.classList.contains("scenario-modal-open")),
+  ).toBe(false);
+  await page
+    .getByRole("button", { name: "Обещанная прогулка", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Закрыть сценарий", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Обещанная прогулка", exact: true }),
+  ).toBeFocused();
 });
