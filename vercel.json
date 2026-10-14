@@ -3,6 +3,7 @@
   "framework": "vite",
   "functions": {
     "api/tts.ts": { "maxDuration": 120 },
+    "api/image-probe.ts": { "maxDuration": 120 },
     "api/voices.ts": { "maxDuration": 120 }
   },
   "headers": [
