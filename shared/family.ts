@@ -3,6 +3,7 @@ export const familySchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(80),
   description: z.string().max(3000),
+  story: z.string().max(100000).optional(),
   home: z.string().max(200),
   members: z.array(z.string().max(60)).max(100),
   links: z

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { BookOpen } from "lucide-vue-next";
+import FamilyStory from "./FamilyStory.vue";
 import {
   familySchema,
   familyError,
@@ -21,6 +23,7 @@ const selected = ref(""),
   pickA = ref(""),
   pickB = ref(""),
   zoom = ref(1);
+const readingStory = ref(false);
 const labels = {
   parent: "Родитель → ребёнок",
   adoptive: "Приёмный родитель → ребёнок",
@@ -36,6 +39,7 @@ if (linkedFamilyId) {
 }
 
 function open(f?: Family) {
+  readingStory.value = false;
   draft.value = f
     ? structuredClone(JSON.parse(JSON.stringify(f)))
     : {
@@ -235,6 +239,19 @@ function move(e: PointerEvent) {
       }}
     </p>
     <template v-if="draft">
+      <button class="family-story-button" @click="readingStory = true">
+        <BookOpen :size="30" aria-hidden="true" />
+        <span
+          ><strong>История</strong
+          ><small>{{ draft.name || "История семьи" }}</small></span
+        >
+        <span aria-hidden="true" class="family-story-arrow">→</span>
+      </button>
+      <FamilyStory
+        v-if="readingStory"
+        :family="draft"
+        @close="readingStory = false"
+      />
       <p v-if="error" class="character-error" role="alert">{{ error }}</p>
       <section class="panel family-meta">
         <label
