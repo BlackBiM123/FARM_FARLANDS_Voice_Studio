@@ -86,7 +86,6 @@ export async function handleCloud(request: Request) {
               id: string;
               profile?: unknown;
               photo?: unknown;
-              fullImage?: unknown;
               sourceText?: unknown;
             }[];
           };
@@ -106,7 +105,6 @@ export async function handleCloud(request: Request) {
           (n) =>
             n.profile === undefined ||
             n.photo === undefined ||
-            n.fullImage === undefined ||
             n.sourceText === undefined,
         ) ||
         (body as { project: { families?: unknown } }).project.families ===
@@ -178,8 +176,6 @@ export async function handleCloud(request: Request) {
         for (const n of parsed.data.project.npcs) {
           if (incoming.find((i) => i.id === n.id)?.sourceText === undefined)
             n.sourceText = old.npcs.find((i) => i.id === n.id)?.sourceText;
-          if (incoming.find((i) => i.id === n.id)?.fullImage === undefined)
-            n.fullImage = old.npcs.find((i) => i.id === n.id)?.fullImage;
           if (
             (incoming.find((i) => i.id === n.id) as { photo?: unknown })
               ?.photo === undefined

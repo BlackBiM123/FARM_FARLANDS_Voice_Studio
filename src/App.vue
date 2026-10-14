@@ -899,7 +899,7 @@ async function exportGodot() {
       })),
     };
     for (const n of manifest.npcs)
-      for (const key of ["photo", "fullImage"] as const) {
+      for (const key of ["photo"] as const) {
         const src = n[key];
         if (!src) continue;
         const response = src.startsWith("/api/image?")

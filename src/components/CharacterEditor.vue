@@ -68,7 +68,7 @@ watch(
   },
 );
 const imageBusy = ref(false);
-async function uploadImage(event: Event, key: "photo" | "fullImage") {
+async function uploadImage(event: Event, key: "photo") {
   const input = event.target as HTMLInputElement,
     file = input.files?.[0];
   input.value = "";
@@ -110,9 +110,6 @@ async function uploadImage(event: Event, key: "photo" | "fullImage") {
 }
 function uploadPhoto(event: Event) {
   void uploadImage(event, "photo");
-}
-function uploadFullImage(event: Event) {
-  void uploadImage(event, "fullImage");
 }
 function reloadForm() {
   if (props.character) {
@@ -251,30 +248,6 @@ function link(index: number, e: Event) {
       >
       <button v-if="draft.photo" type="button" @click="draft.photo = ''">
         Удалить фото
-      </button>
-    </section>
-    <section class="panel photo-editor full-image-editor">
-      <img
-        v-if="draft.fullImage"
-        :src="draft.fullImage"
-        :alt="(draft.name || 'Персонаж') + ' — в полный рост'"
-      />
-      <label
-        >Изображение в полный рост<input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          aria-label="Изображение в полный рост"
-          @change="uploadFullImage"
-        /><small
-          >До 3 МБ. Сохраняется без обрезки, с исходной прозрачностью.</small
-        ></label
-      >
-      <button
-        v-if="draft.fullImage"
-        type="button"
-        @click="draft.fullImage = ''"
-      >
-        Удалить изображение в полный рост
       </button>
     </section>
     <section
