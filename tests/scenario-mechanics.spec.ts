@@ -139,7 +139,14 @@ test("event time windows and fact-confirmed outcomes survive editing; preview do
     .locator(".mechanics-accordion[name=scenario-obligations] summary")
     .click();
   await expect(page.getByLabel("Факт выполнения")).toHaveValue("walk_done");
+  const desktopBox = await page.getByRole("dialog").boundingBox();
+  const desktopViewport = page.viewportSize()!;
+  expect(Math.abs(desktopBox!.x + desktopBox!.width / 2 - desktopViewport.width / 2)).toBeLessThan(2);
+  expect(Math.abs(desktopBox!.y + desktopBox!.height / 2 - desktopViewport.height / 2)).toBeLessThan(2);
   await page.setViewportSize({ width: 390, height: 844 });
+  const mobileBox = await page.getByRole("dialog").boundingBox();
+  expect(Math.abs(mobileBox!.x + mobileBox!.width / 2 - 195)).toBeLessThan(2);
+  expect(Math.abs(mobileBox!.y + mobileBox!.height / 2 - 422)).toBeLessThan(2);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
