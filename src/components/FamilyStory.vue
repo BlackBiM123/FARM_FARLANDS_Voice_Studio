@@ -177,7 +177,13 @@ onUnmounted(() => previousFocus?.focus());
   background: #080a10c9;
   backdrop-filter: blur(6px);
 }
+.family-story-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
 .family-story-header {
+  flex: 0 0 auto;
+  flex-direction: row;
   min-height: 90px;
   padding: 20px 28px;
   display: flex;
@@ -205,6 +211,8 @@ onUnmounted(() => previousFocus?.focus());
   letter-spacing: 0.15em;
 }
 .family-story-layout {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 255px minmax(0, 1fr);
   height: calc(100% - 90px);
@@ -243,6 +251,7 @@ onUnmounted(() => previousFocus?.focus());
   padding: 40px clamp(24px, 5vw, 68px) 64px;
 }
 .family-story-prose {
+  font-weight: 400;
   max-width: 680px;
   margin: 0 auto;
   font-family: Georgia, "Times New Roman", serif;
