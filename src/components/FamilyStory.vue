@@ -18,6 +18,7 @@ const sections = computed(() => {
       return {
         id: `family-story-${index}`,
         title: lines.shift() || "",
+        chapter: part.trim().match(/^Глава ([IVXLC]+)\./)?.[1],
         paragraphs: lines,
       };
     });
@@ -33,15 +34,18 @@ const subtitles = new Set([
   "Школьные годы",
   "Смерть бабушки",
 ]);
+function illustration(chapter?: string) {
+  return props.family.storyIllustrations?.find(
+    (image) => image.chapter === chapter,
+  );
+}
 function jump(id: string) {
-  document
-    .getElementById(id)
-    ?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "instant"
-        : "smooth",
-      block: "start",
-    });
+  document.getElementById(id)?.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "instant"
+      : "smooth",
+    block: "start",
+  });
 }
 onMounted(() => {
   dialog.value?.showModal();
@@ -103,6 +107,19 @@ onUnmounted(() => previousFocus?.focus());
               :key="section.id"
             >
               <h3>{{ section.title }}</h3>
+              <figure
+                v-if="illustration(section.chapter)"
+                class="family-chapter-illustration"
+              >
+                <img
+                  :src="illustration(section.chapter)!.url"
+                  :alt="illustration(section.chapter)!.alt"
+                  loading="lazy"
+                  decoding="async"
+                  width="1536"
+                  height="1024"
+                />
+              </figure>
               <template
                 v-for="(paragraph, index) in section.paragraphs"
                 :key="index"
@@ -123,6 +140,20 @@ onUnmounted(() => previousFocus?.focus());
   </Teleport>
 </template>
 <style>
+.family-chapter-illustration {
+  margin: 0 0 30px;
+}
+.family-chapter-illustration img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: contain;
+  border: 1px solid #b58a4355;
+  border-radius: 8px;
+  image-rendering: pixelated;
+  background: #24221f;
+}
 .family-story-button {
   width: 100%;
   min-height: 96px;
@@ -286,11 +317,13 @@ onUnmounted(() => previousFocus?.focus());
   border-left: 2px solid #b58a43;
   font-style: italic;
 }
-@media (max-width: 700px) {
+@media (max-width: 760px) {
   .family-story-dialog {
-    width: calc(100vw - 16px);
-    height: calc(100dvh - 16px);
-    border-radius: 12px;
+    width: 100%;
+    height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
   }
   .family-story-header {
     padding: 16px;

@@ -1081,10 +1081,12 @@ body.scenario-modal-open {
 }
 @media (max-width: 760px) {
   .scenario-modal {
-    width: calc(100vw - 20px);
-    height: 94dvh;
-    max-height: 96dvh;
-    border-radius: 10px;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
   }
   .scenario-modal-header {
     padding: 15px 48px 14px 16px !important;

@@ -99,7 +99,9 @@ export async function handleCloud(request: Request) {
       ].some((key) => rawProject[key] === undefined);
       if (
         missingContent ||
-        parsed.data.project.families.some((f) => f.story === undefined) ||
+        parsed.data.project.families.some(
+          (f) => f.story === undefined || f.storyIllustrations === undefined,
+        ) ||
         needsMechanicsPreservation(rawProject) ||
         incoming.some(
           (n) =>
@@ -120,6 +122,10 @@ export async function handleCloud(request: Request) {
         for (const family of parsed.data.project.families) {
           if (family.story === undefined)
             family.story = old.families.find((f) => f.id === family.id)?.story;
+          if (family.storyIllustrations === undefined)
+            family.storyIllustrations = old.families.find(
+              (f) => f.id === family.id,
+            )?.storyIllustrations;
         }
         const npcIds = new Set(parsed.data.project.npcs.map((n) => n.id));
         if (rawProject.dialogueGroups === undefined)

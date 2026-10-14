@@ -4,6 +4,37 @@ export const familySchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(3000),
   story: z.string().max(100000).optional(),
+  storyIllustrations: z
+    .array(
+      z.object({
+        chapter: z.enum([
+          "I",
+          "II",
+          "III",
+          "IV",
+          "V",
+          "VI",
+          "VII",
+          "VIII",
+          "IX",
+          "X",
+          "XI",
+        ]),
+        url: z
+          .string()
+          .regex(
+            /^\/api\/image\?id=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        alt: z.string().min(1).max(300),
+      }),
+    )
+    .max(11)
+    .refine(
+      (items) =>
+        new Set(items.map((item) => item.chapter)).size === items.length,
+      "Для главы можно добавить только одну иллюстрацию",
+    )
+    .optional(),
   home: z.string().max(200),
   members: z.array(z.string().max(60)).max(100),
   links: z
