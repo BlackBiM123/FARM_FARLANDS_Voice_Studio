@@ -23,7 +23,7 @@ test("one illustration per chapter, final chapter stays unillustrated", async ({
     npcs: [],
     families: [
       {
-        id: "b3a1765e-741f-43c7-bf15-b1b47e564047",
+        id: "fe4a77f0-47b5-49b5-9773-e0888d7af1c7",
         name: "Семья Брукс",
         description: "",
         home: "",
@@ -83,6 +83,13 @@ test("one illustration per chapter, final chapter stays unillustrated", async ({
   await expect(sections.nth(11)).toContainText("Текст главы XII.");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.getByRole("dialog").boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 });
+  await expect(page.getByRole("tab")).toHaveCount(7);
+  await page.getByRole("tab", { name: "Семья 1", exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toContainText("Хозяин сети, убийца жены");
+  await page.getByRole("tab", { name: "Семья 6", exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toContainText("Гидеон хотел отказаться; Эвелин настояла");
+  await expect(page.getByRole("tabpanel")).toContainText("Этап 6 из 6");
+  await page.getByRole("tab", { name: "Исходная история" }).click();
   const image = article.locator("img").first();
   await image.scrollIntoViewIfNeeded();
   const bounds = await image.boundingBox();

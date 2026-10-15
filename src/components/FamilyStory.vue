@@ -1,10 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, onUnmounted, ref } from "vue";
 import { BookOpen, X } from "lucide-vue-next";
+import { brooksStoryVersions } from "../brooks-story-versions";
 import type { Family } from "../../shared/family";
 const props = defineProps<{ family: Family }>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement | null>(null);
+const activeTab = ref(0);
+const hasVersions = computed(() => props.family.id === "fe4a77f0-47b5-49b5-9773-e0888d7af1c7");
+const version = computed(() => brooksStoryVersions[activeTab.value - 1]);
+function selectTab(index: number) {
+  activeTab.value = index;
+}
+function tabKeys(event: KeyboardEvent, index: number) {
+  let next = index;
+  if (event.key === "ArrowRight") next = (index + 1) % 7;
+  else if (event.key === "ArrowLeft") next = (index + 6) % 7;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = 6;
+  else return;
+  event.preventDefault();
+  selectTab(next);
+  document.getElementById(`story-tab-${next}`)?.focus();
+}
 const previousFocus = document.activeElement as HTMLElement | null;
 const previousOverflow = document.body.style.overflow;
 const sections = computed(() => {
@@ -77,7 +95,33 @@ onUnmounted(() => previousFocus?.focus());
           <X :size="22" aria-hidden="true" />
         </button>
       </header>
-      <div
+      <div v-if="hasVersions" class="family-version-tabs" role="tablist" aria-label="Версии истории">
+        <button v-for="index in 7" :key="index" :id="`story-tab-${index - 1}`" role="tab"
+          :aria-selected="activeTab === index - 1" :tabindex="activeTab === index - 1 ? 0 : -1"
+          :aria-controls="index === 1 ? 'story-original-panel' : 'story-version-panel'"
+          @click="selectTab(index - 1)" @keydown="tabKeys($event, index - 1)">
+          {{ index === 1 ? 'Исходная история' : `Семья ${index - 1}` }}
+        </button>
+      </div>
+      <div v-if="hasVersions && version" :key="activeTab" id="story-version-panel" role="tabpanel"
+        :aria-labelledby="`story-tab-${activeTab}`" tabindex="0" class="family-version-panel">
+        <p class="version-step">Этап {{ activeTab }} из 6 · {{ version.impression }}</p>
+        <h3>{{ version.title }}</h3>
+        <p class="version-note">Рекомендуемый порядок раскрытия, а не даты событий. Игрок начинает без собственной версии. Семьи пока обозначены условно; их назначим после проработки жителей города.</p>
+        <h4>История, в которую верит семья</h4><p>{{ version.story }}</p>
+        <h4>Кто рассказывает</h4><p>{{ version.source }}</p>
+        <h4>Почему игрок верит</h4><p>{{ version.evidence }}</p>
+        <h4>Что выяснить в квесте</h4><p>{{ version.quest }}</p>
+        <h4>Истина и искажения · для автора</h4><p>{{ version.truth }}</p>
+        <h4>{{ activeTab === 6 ? 'Итог раскрытия' : 'Вопрос к следующему этапу' }}</h4><p>{{ version.next }}</p>
+        <p class="version-note">Квестовые улики и свидетели — рабочая проработка. Рассказ семьи не равен канону. Уточнение о последнем рейсе закреплено: Гидеон хотел отказаться, Эвелин настояла.</p>
+        <div class="version-navigation">
+          <button @click="selectTab(activeTab - 1)">{{ activeTab === 1 ? 'К исходной истории' : 'Предыдущий этап' }}</button>
+          <button v-if="activeTab < 6" @click="selectTab(activeTab + 1)">Следующий этап →</button>
+        </div>
+      </div>
+      <div v-show="!hasVersions || activeTab === 0" id="story-original-panel"
+        :role="hasVersions ? 'tabpanel' : undefined" :aria-labelledby="hasVersions ? 'story-tab-0' : undefined"
         class="family-story-layout"
         :class="{ 'is-empty': !sections.length }"
       >
@@ -140,6 +184,17 @@ onUnmounted(() => previousFocus?.focus());
   </Teleport>
 </template>
 <style>
+.family-version-tabs { display: flex; gap: 8px; overflow-x: auto; flex: 0 0 auto; padding: 12px 16px; border-bottom: 1px solid #ffffff14; }
+.family-version-tabs button { flex: 0 0 auto; white-space: nowrap; }
+.family-version-tabs [aria-selected="true"] { background: #60472a; color: #ffe0aa; border-color: #c6a66f; }
+.family-version-panel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 28px clamp(20px, 5vw, 68px) 48px; line-height: 1.8; }
+.family-version-panel h3 { color: #efcf96; font-size: 27px; margin: 12px 0; }
+.family-version-panel h4 { color: #debe89; margin: 28px 0 8px; font-size: 18px; }
+.family-version-panel p { max-width: 780px; }
+.version-step { color: #efcf96; font-size: 14px; }
+.version-note { color: #b8b1a6; font-size: 13px; }
+.version-navigation { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+
 .family-chapter-illustration {
   margin: 0 0 30px;
 }
