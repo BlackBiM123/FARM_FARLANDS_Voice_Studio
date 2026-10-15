@@ -27,6 +27,23 @@ describe("private character images", () => {
     ).toBe(401);
     expect(cloudClient).not.toHaveBeenCalled();
   });
+  it("allows private browser caching of immutable image URLs", async () => {
+    const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    vi.mocked(cloudClient).mockReturnValue({ storage: { from: () => ({
+      download: async () => ({ data: new Blob([bytes], { type: "image/png" }), error: null }),
+    }) } } as unknown as ReturnType<typeof cloudClient>);
+    const response = await handleImage(request(undefined, "image/png", "GET"));
+    expect(response.headers.get("Cache-Control")).toBe("private, max-age=31536000, immutable");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+  });
+  it("does not cache missing images", async () => {
+    vi.mocked(cloudClient).mockReturnValue({ storage: { from: () => ({
+      download: async () => ({ data: null, error: {} }),
+    }) } } as unknown as ReturnType<typeof cloudClient>);
+    const response = await handleImage(request(undefined, "image/png", "GET"));
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
   it("rejects unsupported and mismatched images", async () => {
     vi.mocked(cloudClient).mockReturnValue(
       {} as ReturnType<typeof cloudClient>,

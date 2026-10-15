@@ -2,7 +2,7 @@ import { z } from "zod";
 import { cloudClient, cloudGuard } from "./cloud.js";
 const bucket = "studio-images";
 const json = (error: string, status: number) =>
-  Response.json({ error }, { status });
+  Response.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
 export async function handleImage(request: Request) {
   const denied = await cloudGuard(request);
   if (denied) return denied;
@@ -21,7 +21,8 @@ export async function handleImage(request: Request) {
       return new Response(data, {
         headers: {
           "Content-Type": data.type,
-          "Cache-Control": "private, no-store",
+          // Uploads never overwrite an ID; replacements receive a new URL.
+          "Cache-Control": "private, max-age=31536000, immutable",
           "X-Content-Type-Options": "nosniff",
         },
       });
