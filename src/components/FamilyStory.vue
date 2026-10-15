@@ -114,7 +114,6 @@ onUnmounted(() => previousFocus?.focus());
         <h4>Что выяснить в квесте</h4><p>{{ version.quest }}</p>
         <h4>Истина и искажения · для автора</h4><p>{{ version.truth }}</p>
         <h4>{{ activeTab === 6 ? 'Итог раскрытия' : 'Вопрос к следующему этапу' }}</h4><p>{{ version.next }}</p>
-        <p class="version-note">Квестовые улики и свидетели — рабочая проработка. Рассказ семьи не равен канону. Уточнение о последнем рейсе закреплено: Гидеон хотел отказаться, Эвелин настояла.</p>
         <div class="version-navigation">
           <button @click="selectTab(activeTab - 1)">{{ activeTab === 1 ? 'К исходной истории' : 'Предыдущий этап' }}</button>
           <button v-if="activeTab < 6" @click="selectTab(activeTab + 1)">Следующий этап →</button>
