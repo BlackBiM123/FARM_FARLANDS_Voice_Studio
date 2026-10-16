@@ -4,6 +4,14 @@ export const familySchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(3000),
   story: z.string().max(100000).optional(),
+  storyEntries: z.array(z.object({
+    key: z.string().min(1).max(100),
+    title: z.string().min(1).max(200),
+    text: z.string().max(30000),
+    initialKnowledge: z.enum(["unknown", "heard", "confirmed"]).default("unknown"),
+    confirmationRule: z.string().max(3000),
+  })).max(30).optional(),
+  storyDiscoveryNotes: z.string().max(20000).optional(),
   storyIllustrations: z
     .array(
       z.object({

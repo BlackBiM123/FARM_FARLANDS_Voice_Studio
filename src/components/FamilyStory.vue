@@ -7,6 +7,22 @@ const props = defineProps<{ family: Family }>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement | null>(null);
 const activeTab = ref(0);
+const entryTab = ref(0);
+const entries = computed(() => props.family.storyEntries || []);
+const activeEntry = computed(() => entries.value[entryTab.value - 1]);
+const entryTabs = computed(() => ["История семьи", ...entries.value.map(e => e.title), ...(props.family.storyDiscoveryNotes ? ["Раскрытие историй"] : [])]);
+function entryKeys(event: KeyboardEvent, index: number) {
+  const length = entryTabs.value.length;
+  let next = index;
+  if (event.key === "ArrowRight") next = (index + 1) % length;
+  else if (event.key === "ArrowLeft") next = (index + length - 1) % length;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = length - 1;
+  else return;
+  event.preventDefault(); entryTab.value = next;
+  document.getElementById("entry-tab-" + next)?.focus();
+}
+const knowledgeLabels = {unknown:"Неизвестен", heard:"Услышан", confirmed:"Подтверждён"};
 const hasVersions = computed(() => props.family.id === "fe4a77f0-47b5-49b5-9773-e0888d7af1c7");
 const version = computed(() => brooksStoryVersions[activeTab.value - 1]);
 function selectTab(index: number) {
@@ -95,6 +111,23 @@ onUnmounted(() => previousFocus?.focus());
           <X :size="22" aria-hidden="true" />
         </button>
       </header>
+      <div v-if="entries.length" class="family-version-tabs" role="tablist" aria-label="История и рассказы">
+        <button v-for="(title, index) in entryTabs" :id="'entry-tab-' + index" :key="index" role="tab"
+          :aria-selected="entryTab === index" :tabindex="entryTab === index ? 0 : -1"
+          :aria-controls="index === 0 ? 'story-original-panel' : 'family-entry-panel'"
+          @click="entryTab = index" @keydown="entryKeys($event, index)">{{ title }}</button>
+      </div>
+      <div v-if="entries.length && entryTab > 0" :key="entryTab" id="family-entry-panel" role="tabpanel"
+        :aria-labelledby="'entry-tab-' + entryTab" tabindex="0" class="family-version-panel">
+        <template v-if="activeEntry">
+          <h3>{{ activeEntry.title }}</h3>
+          <p class="version-step">Начальное знание игрока: {{ knowledgeLabels[activeEntry.initialKnowledge] }}</p>
+          <p class="version-note">Неизвестен → услышан → подтверждён. Это начальные настройки истории; игровой прогресс хранится в сохранении игры.</p>
+          <h4>Условие подтверждения</h4><p>{{ activeEntry.confirmationRule }}</p>
+          <div class="family-entry-text">{{ activeEntry.text }}</div>
+        </template>
+        <template v-else><h3>Раскрытие историй</h3><div class="family-entry-text">{{ family.storyDiscoveryNotes }}</div></template>
+      </div>
       <div v-if="hasVersions" class="family-version-tabs" role="tablist" aria-label="Версии истории">
         <button v-for="index in 7" :key="index" :id="`story-tab-${index - 1}`" role="tab"
           :aria-selected="activeTab === index - 1" :tabindex="activeTab === index - 1 ? 0 : -1"
@@ -119,7 +152,7 @@ onUnmounted(() => previousFocus?.focus());
           <button v-if="activeTab < 6" @click="selectTab(activeTab + 1)">Следующий этап →</button>
         </div>
       </div>
-      <div v-show="!hasVersions || activeTab === 0" id="story-original-panel"
+      <div v-show="(!hasVersions || activeTab === 0) && (!entries.length || entryTab === 0)" id="story-original-panel"
         :role="hasVersions ? 'tabpanel' : undefined" :aria-labelledby="hasVersions ? 'story-tab-0' : undefined"
         class="family-story-layout"
         :class="{ 'is-empty': !chapters.length }"
