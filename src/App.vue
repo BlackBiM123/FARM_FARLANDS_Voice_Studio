@@ -52,7 +52,9 @@ const initialDialogueNpc = computed(
     undefined,
 );
 const characterMode = computed(() =>
-  characterHash.value.startsWith("#/dialogue")
+  characterHash.value === "#/settings"
+    ? "settings"
+    : characterHash.value.startsWith("#/dialogue")
     ? "dialogue"
     : characterHash.value.startsWith("#/stories")
       ? "stories"
@@ -75,23 +77,21 @@ function readCharacterHash() {
 onMounted(() => window.addEventListener("hashchange", readCharacterHash));
 onUnmounted(() => window.removeEventListener("hashchange", readCharacterHash));
 function openCharacter(id: string) {
-  usersOpen.value = false;
   window.location.hash = "/characters/" + id + "/edit";
 }
+function settingsPage() {
+  window.location.hash = "/settings";
+}
 function windowFamilyPage() {
-  usersOpen.value = false;
   window.location.hash = "/families";
 }
 function dialoguePage(id?: string) {
-  usersOpen.value = false;
   window.location.hash = "/dialogue" + (id ? "/" + id : "");
 }
 function storyPage(id?: string) {
-  usersOpen.value = false;
   window.location.hash = "/stories" + (id ? "/" + id : "");
 }
 function characterLines(id: string) {
-  usersOpen.value = false;
   window.location.hash = "/dialogue?npc=" + encodeURIComponent(id);
 }
 function scenarioLine(scenarioId: string, npcId: string) {
@@ -119,7 +119,6 @@ function scenarioLine(scenarioId: string, npcId: string) {
 }
 function characterCatalog() {
   window.location.hash = "/characters";
-  usersOpen.value = false;
 }
 function voicePage(view: "studio" | "casting") {
   window.location.hash = "";
@@ -142,8 +141,7 @@ const sessionChecking = ref(true),
     id: string;
     username: string;
     role: "admin" | "user";
-  } | null>(null),
-  usersOpen = ref(false);
+  } | null>(null);
 import { voiceInfo, genderLabel, emotionPresets } from "./voice-options";
 import {
   cloudRequest,
@@ -422,7 +420,6 @@ function lostSession() {
   authenticated.value = false;
   account.value = null;
   cloudReady.value = false;
-  usersOpen.value = false;
   clearTimeout(cloudTimer);
   loginError.value = "Сессия завершена или доступ отключён. Войдите снова.";
 }
@@ -431,7 +428,6 @@ async function logout() {
   await fetch("/api/session", { method: "DELETE" });
   authenticated.value = false;
   account.value = null;
-  usersOpen.value = false;
   cloudReady.value = false;
   cloudConfigured.value = false;
   cloudMessage.value = "Войдите для облачной синхронизации";
@@ -590,7 +586,6 @@ async function importProject(e: Event) {
   input.value = "";
 }
 function addNPC() {
-  usersOpen.value = false;
   window.location.hash = "/characters/new";
 }
 async function generate() {
@@ -1008,21 +1003,13 @@ function pauseOthers(e: Event) {
         @click="storyPage()"
       >
         События и конфликты</button
+      ><button :class="{ chosen: characterMode === 'settings' }" @click="settingsPage"><Settings2 :size="16" /> Настройки</button
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small
         >{{ npcs.length }} ПЕРСОНАЖЕЙ ·
         {{ cloudConfigured ? "ОБЛАЧНЫЙ ПРОЕКТ" : "ЛОКАЛЬНЫЙ ПРОЕКТ" }}</small
       >
     </nav>
-    <div v-if="account?.role === 'admin'" class="admin-toolbar">
-      <button @click="usersOpen = !usersOpen">
-        {{ usersOpen ? "Закрыть пользователей" : "Пользователи" }}</button
-      ><span>Администратор</span>
-    </div>
-    <UserAdmin
-      v-if="usersOpen && account?.role === 'admin'"
-      :current-id="account.id"
-    />
     <section class="cloud-status panel">
       <div>
         <strong>{{
@@ -1049,7 +1036,7 @@ function pauseOthers(e: Event) {
         >
       </div>
     </section>
-    <section class="game-style panel">
+    <section v-if="characterMode === 'studio' || characterMode === 'dialogue'" class="game-style panel">
       <label class="game-style-toggle"
         ><input v-model="gameCharacter" type="checkbox" /><span
           ><strong>Персонаж Farm & Farlands</strong
@@ -1066,7 +1053,12 @@ function pauseOthers(e: Event) {
         <p>{{ gameStyleRule }}</p>
       </details>
     </section>
-    <section v-if="characterMode === 'catalog'" class="character-catalog panel">
+    <section v-if="characterMode === 'settings'" class="settings-page">
+      <div class="panel"><h2>Настройки</h2><p>Учётная запись: {{ account?.username }}</p></div>
+      <UserAdmin v-if="account?.role === 'admin'" :current-id="account.id" />
+      <p v-else class="panel">Управление пользователями доступно администратору.</p>
+    </section>
+    <section v-else-if="characterMode === 'catalog'" class="character-catalog panel">
       <div class="section-heading">
         <div>
           <span class="eyebrow">НАСЕЛЕНИЕ РЕГИОНА</span>
