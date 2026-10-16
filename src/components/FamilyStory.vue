@@ -54,7 +54,7 @@ const subtitles = new Set([
 ]);
 function illustration(chapter?: string) {
   return props.family.storyIllustrations?.find(
-    (image) => image.chapter === chapter,
+    (image) => image.chapter === (chapter || "cover"),
   );
 }
 function jump(id: string) {
@@ -122,7 +122,7 @@ onUnmounted(() => previousFocus?.focus());
       <div v-show="!hasVersions || activeTab === 0" id="story-original-panel"
         :role="hasVersions ? 'tabpanel' : undefined" :aria-labelledby="hasVersions ? 'story-tab-0' : undefined"
         class="family-story-layout"
-        :class="{ 'is-empty': !sections.length }"
+        :class="{ 'is-empty': !chapters.length }"
       >
         <nav
           v-if="chapters.length"

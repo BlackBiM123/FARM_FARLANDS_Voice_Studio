@@ -8,6 +8,7 @@ export const familySchema = z.object({
     .array(
       z.object({
         chapter: z.enum([
+          "cover",
           "I",
           "II",
           "III",
