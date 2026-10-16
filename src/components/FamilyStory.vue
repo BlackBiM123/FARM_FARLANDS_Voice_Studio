@@ -124,9 +124,9 @@ onUnmounted(() => previousFocus?.focus());
           <p class="version-step">Начальное знание игрока: {{ knowledgeLabels[activeEntry.initialKnowledge] }}</p>
           <p class="version-note">Неизвестен → услышан → подтверждён. Это начальные настройки истории; игровой прогресс хранится в сохранении игры.</p>
           <h4>Условие подтверждения</h4><p>{{ activeEntry.confirmationRule }}</p>
-          <div class="family-entry-text">{{ activeEntry.text }}</div>
+          <div class="family-entry-text"><p v-for="(paragraph, i) in activeEntry.text.split(/\n+/).filter(Boolean)" :key="i" style="margin: 0 0 16px; line-height: 1.85">{{ paragraph }}</p></div>
         </template>
-        <template v-else><h3>Раскрытие историй</h3><div class="family-entry-text">{{ family.storyDiscoveryNotes }}</div></template>
+        <template v-else><h3>Раскрытие историй</h3><div class="family-entry-text"><p v-for="(paragraph, i) in (family.storyDiscoveryNotes || '').split(/\n+/).filter(Boolean)" :key="i" style="margin: 0 0 16px; line-height: 1.85">{{ paragraph }}</p></div></template>
       </div>
       <div v-if="hasVersions" class="family-version-tabs" role="tablist" aria-label="Версии истории">
         <button v-for="index in 7" :key="index" :id="`story-tab-${index - 1}`" role="tab"
