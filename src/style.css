@@ -1564,3 +1564,31 @@ button.danger:disabled { opacity:.35; cursor:not-allowed; }
 @media(max-width:600px) { .portrait-upload-button { width:136px; min-width:136px; } .portrait-upload-button img { width:136px; height:164px; } }
 
 .character-card-heading input[type="file"] { display: none; }
+
+/* Long text remains a native editable field, with the full value visible. */
+textarea.auto-growing-text {
+  min-height: 58px !important;
+  max-height: none !important;
+  overflow-y: hidden !important;
+  resize: none;
+  line-height: 1.65;
+  box-sizing: border-box;
+}
+.schedule-row { display:flex; align-items:center; gap:8px; border-bottom:1px solid #ffffff12; padding:8px 0; margin:0; }
+.schedule-fields { display:grid; grid-template-columns:132px 92px 92px minmax(110px,.8fr) minmax(160px,1.5fr); align-items:start; gap:8px; flex:1; min-width:0; }
+.schedule-fields label { margin:0; font-size:10px; min-width:0; }
+.schedule-fields input, .schedule-fields select, .schedule-fields textarea { margin-top:4px; padding:6px 8px; min-width:0; font-size:12px; }
+.schedule-fields input[type="time"] { width:92px; min-width:0; padding:6px 3px; font-variant-numeric:tabular-nums; }
+.schedule-fields textarea.auto-growing-text { min-height:32px !important; }
+.schedule-remove { flex:0 0 30px; width:30px; height:30px; padding:0; margin-top:15px; font-size:20px; color:#d79f95; }
+@media(max-width:1150px) {
+  .schedule-fields { grid-template-columns:minmax(120px,1fr) 92px 92px; }
+  .schedule-fields label:nth-child(4) { grid-column:1/2; }
+  .schedule-fields .schedule-activity { grid-column:2/4; }
+}
+@media(max-width:560px) {
+  .schedule-fields { grid-template-columns:minmax(90px,1fr) 80px 80px; gap:6px; }
+  .schedule-fields input[type="time"] { width:80px; font-size:11px; }
+  .schedule-fields label:nth-child(4), .schedule-fields .schedule-activity { grid-column:1/-1; }
+  .schedule-row { align-items:flex-start; }
+}

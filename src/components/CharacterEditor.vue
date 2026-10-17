@@ -380,9 +380,9 @@ function link(index: number, e: Event) {
           <article
             v-for="(row, i) in draft.profile.schedule"
             :key="i"
-            class="profile-row"
+            class="schedule-row"
           >
-            <div class="character-fields">
+            <div class="schedule-fields">
               <label
                 >День<select v-model="row.day">
                   <option value="daily">Каждый день</option>
@@ -397,12 +397,21 @@ function link(index: number, e: Event) {
               ><label>С<input v-model="row.start" type="time" /></label
               ><label>До<input v-model="row.end" type="time" /></label
               ><label>Место<input v-model="row.place" maxlength="250" /></label
-              ><label class="wide"
-                >Занятие<input v-model="row.activity" maxlength="500"
-              /></label>
+              ><label class="schedule-activity"
+                >Занятие<textarea
+                  v-model="row.activity"
+                  maxlength="500"
+                  rows="1"
+                />
+              </label>
             </div>
-            <button type="button" @click="draft.profile.schedule.splice(i, 1)">
-              Убрать занятие
+            <button
+              type="button"
+              class="schedule-remove"
+              :aria-label="'Убрать занятие ' + (i + 1)"
+              @click="draft.profile.schedule.splice(i, 1)"
+            >
+              ×
             </button>
           </article></template
         >

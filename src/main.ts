@@ -5,4 +5,7 @@ import App from "./App.vue";
 
 import { installNavigation } from "./navigation";
 installNavigation();
-createApp(App).mount("#app");
+import { installAutoGrowingText } from "./auto-growing-text";
+const app = createApp(App);
+installAutoGrowingText(app);
+app.mount("#app");
