@@ -108,6 +108,8 @@ test("clean links, portrait replacement and typed-name deletion preserve unrelat
     "Анна Тестова",
   );
   await page.goForward();
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page
     .getByRole("button", { name: "Удалить Анна Тестова", exact: true })
     .click();
