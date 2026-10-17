@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { BookOpen } from "lucide-vue-next";
+import { route, navigate } from "../navigation";
 import FamilyStory from "./FamilyStory.vue";
 import {
   familySchema,
@@ -32,10 +33,11 @@ const labels = {
   former: "Бывшие партнёры",
 };
 let original = "";
-const linkedFamilyId = window.location.hash.split("/")[2];
+const linkedFamilyId = route.value.split("/")[2];
 if (linkedFamilyId) {
   const family = props.modelValue.find((f) => f.id === linkedFamilyId);
   if (family) open(family);
+  else if (linkedFamilyId === "new") open();
 }
 
 function open(f?: Family) {
@@ -51,6 +53,7 @@ function open(f?: Family) {
         links: [],
       };
   selected.value = f?.id || "";
+  navigate("/families/" + (f ? f.id : "new"));
   original = JSON.stringify(f || null);
   error.value = "";
   pickA.value = "";
@@ -88,6 +91,7 @@ function save() {
   original = JSON.stringify(parsed.data);
   selected.value = parsed.data.id;
   emit("update:modelValue", list);
+  navigate("/families/" + parsed.data.id);
 }
 function member(id: string, event: Event) {
   if (!draft.value) return;

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onUnmounted } from "vue";
+import { navigate, route } from "../navigation";
 import ScenarioMechanics from "./ScenarioMechanics.vue";
 import { parseFacts } from "../../shared/scenario-mechanics";
 import { Plus, GripVertical, Trash2, ArrowRight, X } from "lucide-vue-next";
@@ -76,6 +77,10 @@ async function tabKeys(event: KeyboardEvent) {
   button?.focus();
   button?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
+watch(selected, (id) => {
+  if (route.value.startsWith("/stories"))
+    navigate("/stories" + (id ? "/" + id : ""));
+});
 watch(editorTab, async () => {
   await nextTick();
   modal.value?.querySelector(".scenario-modal-body")?.scrollTo(0, 0);

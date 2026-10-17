@@ -136,7 +136,7 @@ test("bilingual dialogue, audio reuse, drag groups, conflicts and clean-browser 
   await page
     .getByRole("button", { name: "Реплика инициатора", exact: true })
     .click();
-  await expect(page).toHaveURL(/#\/dialogue\//);
+  await expect(page).toHaveURL(/\/dialogue\//);
   await page.locator(".line-summary .compact-expand button").first().click();
   const row = page.locator(".line-expanded");
   await row.locator(".line-ru textarea").fill("Поговорим после сбора урожая.");

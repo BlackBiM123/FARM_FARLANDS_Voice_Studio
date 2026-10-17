@@ -22,6 +22,7 @@ import {
   type DialogueGroup,
   type Scenario,
 } from "../../shared/content";
+import { navigate, route } from "../navigation";
 import { parseFacts } from "../../shared/scenario-mechanics";
 import type { NPC } from "../../shared/schema";
 import type { Take } from "../storage";
@@ -63,6 +64,14 @@ watch(
     page.value = 1;
   },
 );
+watch([scenarioFilter, npcFilter], ([scenario, npc]) => {
+  if (route.value.startsWith("/dialogue"))
+    navigate(
+      "/dialogue" +
+        (scenario ? "/" + scenario : "") +
+        (npc ? "?npc=" + encodeURIComponent(npc) : ""),
+    );
+});
 const countPerPage = 25;
 watch(page, stopAudio);
 watch(

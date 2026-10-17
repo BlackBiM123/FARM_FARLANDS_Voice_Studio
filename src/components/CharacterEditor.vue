@@ -24,6 +24,7 @@ const props = defineProps<{
   emit = defineEmits<{
     save: [character: NPC, openStudio: boolean];
     cancel: [];
+    delete: [character: NPC];
     openLines: [id: string];
   }>();
 const draft = ref<NPC>(
@@ -68,6 +69,7 @@ watch(
   },
 );
 const imageBusy = ref(false);
+const photoInput = ref<HTMLInputElement | null>(null);
 async function uploadImage(event: Event, key: "photo") {
   const input = event.target as HTMLInputElement,
     file = input.files?.[0];
@@ -216,6 +218,14 @@ function link(index: number, e: Event) {
         </p>
       </div>
       <div class="character-save-actions">
+        <button
+          v-if="character"
+          type="button"
+          class="danger"
+          @click="emit('delete', character)"
+        >
+          Удалить персонажа
+        </button>
         <button type="button" @click="emit('cancel')">
           Вернуться к персонажам</button
         ><button class="primary" type="submit">Сохранить персонажа</button>
@@ -229,16 +239,26 @@ function link(index: number, e: Event) {
     </p>
     <p v-if="imageBusy" role="status">Загрузка изображения…</p>
     <section class="panel photo-editor">
-      <img
-        v-if="draft.photo"
-        :src="draft.photo"
-        :alt="draft.name || 'Фото персонажа'"
-      />
-      <span v-else class="tree-initial">{{
-        draft.name.slice(0, 1) || "?"
-      }}</span>
+      <button
+        type="button"
+        class="portrait-upload-button"
+        :disabled="imageBusy"
+        aria-label="Заменить портрет"
+        @click="photoInput?.click()"
+      >
+        <img
+          v-if="draft.photo"
+          :src="draft.photo"
+          :alt="draft.name || 'Фото персонажа'"
+        />
+        <span v-else class="tree-initial">{{
+          draft.name.slice(0, 1) || "?"
+        }}</span>
+        <small>{{ imageBusy ? "Загрузка…" : "Изменить фото" }}</small>
+      </button>
       <label
         >Фото персонажа<input
+          ref="photoInput"
           type="file"
           accept="image/jpeg,image/png,image/webp"
           @change="uploadPhoto"
@@ -258,7 +278,7 @@ function link(index: number, e: Event) {
       <a
         v-for="f in families.filter((f) => f.members.includes(draft.id))"
         :key="f.id"
-        :href="'#/families/' + f.id"
+        :href="'/families/' + f.id"
         >{{ f.name }} · Открыть дерево
       </a>
     </section>

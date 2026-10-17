@@ -21,7 +21,7 @@ test("character draft, family links, story fields and voice survive save, reload
   await page
     .getByRole("button", { name: "Создать персонажа", exact: true })
     .click();
-  await expect(page).toHaveURL(/#\/characters\/new$/);
+  await expect(page).toHaveURL(/\/characters\/new$/);
   await page.getByLabel("Имя", { exact: true }).fill("Персонаж для проверки");
   await page.getByLabel("Роль", { exact: true }).fill("Фермер");
   await page.getByLabel("Возраст, лет").fill("42");
@@ -80,7 +80,7 @@ test("character draft, family links, story fields and voice survive save, reload
     .getByRole("button", { name: "Сохранить персонажа", exact: true })
     .first()
     .click();
-  await expect(page).toHaveURL(/#\/characters\/npc_[a-z0-9]+\/edit$/);
+  await expect(page).toHaveURL(/\/characters\/npc_[a-z0-9]+\/edit$/);
   await page.reload();
   await page.getByRole("button", { name: "Характер", exact: true }).click();
   await expect(page.getByLabel("Биография", { exact: true })).toHaveValue(

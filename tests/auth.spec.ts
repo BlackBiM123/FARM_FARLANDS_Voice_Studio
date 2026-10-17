@@ -80,7 +80,7 @@ test("password gate hides the studio, then administrator can add and disable use
   await expect(
     page.getByRole("heading", { name: "Начните с персонажа" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Пользователи", exact: true }).click();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
   await page.getByLabel("Логин нового пользователя").fill("voice_artist");
   await page
     .getByLabel("Пароль нового пользователя")
@@ -128,8 +128,9 @@ test("regular user has no user-management interface and mobile login fits", asyn
   await expect(
     page.getByRole("heading", { name: "Начните с персонажа" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Пользователи", exact: true }),
+    page.getByRole("heading", { name: "Пользователи студии" }),
   ).toHaveCount(0);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),

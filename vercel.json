@@ -2,21 +2,63 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "functions": {
-    "api/tts.ts": { "maxDuration": 120 },
-    "api/image-probe.ts": { "maxDuration": 120 },
-    "api/voices.ts": { "maxDuration": 120 }
+    "api/tts.ts": {
+      "maxDuration": 120
+    },
+    "api/image-probe.ts": {
+      "maxDuration": 120
+    },
+    "api/voices.ts": {
+      "maxDuration": 120
+    }
   },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "same-origin" },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "same-origin"
+        },
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         }
       ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/studio/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/casting/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/characters/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/families/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/dialogue/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/stories/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/settings/:path*",
+      "destination": "/index.html"
     }
   ]
 }

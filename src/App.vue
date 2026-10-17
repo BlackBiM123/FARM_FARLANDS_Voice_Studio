@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, nextTick, ref, watch } from "vue";
+import {
+  defineAsyncComponent,
+  computed,
+  onMounted,
+  onUnmounted,
+  nextTick,
+  ref,
+  watch,
+} from "vue";
 import {
   AudioLines,
   Download,
@@ -14,6 +22,10 @@ import {
   Headphones,
 } from "lucide-vue-next";
 import JSZip from "jszip";
+import { readCharacterPhoto } from "./character-image";
+import PageLoader from "./components/PageLoader.vue";
+import { route, routeLoading, navigate } from "./navigation";
+import { removeCharacter } from "../shared/remove-character";
 import { initialNPCs } from "./data";
 import { loadGameCharacter } from "./storage";
 import { gameStyleRule } from "../shared/game-style";
@@ -22,8 +34,16 @@ import { loadProject, saveProject, takesDB, type Take } from "./storage";
 import { projectSchema, voices, models } from "../shared/schema";
 import VoiceDesigner from "./components/VoiceDesigner.vue";
 import type { DesignedVoice } from "../shared/designed-voice";
-import DialoguePage from "./components/DialoguePage.vue";
-import StoryPage from "./components/StoryPage.vue";
+const DialoguePage = defineAsyncComponent({
+  loader: () => import("./components/DialoguePage.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+});
+const StoryPage = defineAsyncComponent({
+  loader: () => import("./components/StoryPage.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+});
 import {
   dialogueLineSchema,
   type DialogueLine,
@@ -32,7 +52,11 @@ import {
 } from "../shared/content";
 import QuotaPanel from "./components/QuotaPanel.vue";
 import UserAdmin from "./components/UserAdmin.vue";
-import FamilyEditor from "./components/FamilyEditor.vue";
+const FamilyEditor = defineAsyncComponent({
+  loader: () => import("./components/FamilyEditor.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+});
 import { loadContent } from "./storage";
 const content = loadContent();
 const dialogueGroups = ref<DialogueGroup[]>(content.dialogueGroups),
@@ -42,9 +66,13 @@ const dialogueGroups = ref<DialogueGroup[]>(content.dialogueGroups),
 import { loadFamilies } from "./storage";
 const families = ref(loadFamilies());
 import ImageHoverPreview from "./components/ImageHoverPreview.vue";
-import CharacterEditor from "./components/CharacterEditor.vue";
+const CharacterEditor = defineAsyncComponent({
+  loader: () => import("./components/CharacterEditor.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+});
 import type { NPC } from "../shared/schema";
-const characterHash = ref(window.location.hash),
+const characterHash = computed(() => "#" + route.value),
   projectLoaded = ref(false);
 const initialDialogueNpc = computed(
   () =>
@@ -55,44 +83,41 @@ const characterMode = computed(() =>
   characterHash.value === "#/settings"
     ? "settings"
     : characterHash.value.startsWith("#/dialogue")
-    ? "dialogue"
-    : characterHash.value.startsWith("#/stories")
-      ? "stories"
-      : characterHash.value.startsWith("#/families")
-        ? "families"
-        : characterHash.value === "#/characters/new"
-          ? "new"
-          : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
-            ? "edit"
-            : characterHash.value === "#/characters"
-              ? "catalog"
-              : "studio",
+      ? "dialogue"
+      : characterHash.value.startsWith("#/stories")
+        ? "stories"
+        : characterHash.value.startsWith("#/families")
+          ? "families"
+          : characterHash.value === "#/characters/new"
+            ? "new"
+            : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
+              ? "edit"
+              : characterHash.value === "#/characters"
+                ? "catalog"
+                : "studio",
 );
 const editingCharacter = computed(() =>
-  npcs.value.find((n) => n.id === characterHash.value.split("/")[2]),
+  npcs.value.find(
+    (n) => n.id === characterHash.value.split("?")[0]!.split("/")[2],
+  ),
 );
-function readCharacterHash() {
-  characterHash.value = window.location.hash;
-}
-onMounted(() => window.addEventListener("hashchange", readCharacterHash));
-onUnmounted(() => window.removeEventListener("hashchange", readCharacterHash));
 function openCharacter(id: string) {
-  window.location.hash = "/characters/" + id + "/edit";
+  navigate("/characters/" + id + "/edit");
 }
 function settingsPage() {
-  window.location.hash = "/settings";
+  navigate("/settings");
 }
 function windowFamilyPage() {
-  window.location.hash = "/families";
+  navigate("/families");
 }
 function dialoguePage(id?: string) {
-  window.location.hash = "/dialogue" + (id ? "/" + id : "");
+  navigate("/dialogue" + (id ? "/" + id : ""));
 }
 function storyPage(id?: string) {
-  window.location.hash = "/stories" + (id ? "/" + id : "");
+  navigate("/stories" + (id ? "/" + id : ""));
 }
 function characterLines(id: string) {
-  window.location.hash = "/dialogue?npc=" + encodeURIComponent(id);
+  navigate("/dialogue?npc=" + encodeURIComponent(id));
 }
 function scenarioLine(scenarioId: string, npcId: string) {
   if (dialogueLines.value.length >= 2000) {
@@ -118,12 +143,21 @@ function scenarioLine(scenarioId: string, npcId: string) {
   dialoguePage(scenarioId);
 }
 function characterCatalog() {
-  window.location.hash = "/characters";
+  navigate("/characters");
 }
 function voicePage(view: "studio" | "casting") {
-  window.location.hash = "";
+  navigate(
+    "/" +
+      view +
+      (selected.value ? "?npc=" + encodeURIComponent(selected.value) : ""),
+  );
   tab.value = view;
 }
+watch(route, (value) => {
+  tab.value = value.startsWith("/casting") ? "casting" : "studio";
+  const id = new URLSearchParams(value.split("?")[1] || "").get("npc");
+  if (id && npcs.value.some((n) => n.id === id)) selected.value = id;
+});
 function saveCharacter(value: NPC, openStudio: boolean) {
   const index = npcs.value.findIndex((n) => n.id === value.id);
   if (index >= 0) npcs.value[index] = value;
@@ -516,6 +550,7 @@ onMounted(async () => {
     account.value = data.user ?? null;
   } catch {}
   sessionChecking.value = false;
+  tab.value = route.value.startsWith("/casting") ? "casting" : "studio";
   try {
     takes.value = await takesDB("read");
     takes.value.forEach(
@@ -529,6 +564,11 @@ onMounted(async () => {
   }
   if (authenticated.value) await syncCloud();
   projectLoaded.value = true;
+  const linkedNpc = new URLSearchParams(route.value.split("?")[1] || "").get(
+    "npc",
+  );
+  if (linkedNpc && npcs.value.some((n) => n.id === linkedNpc))
+    selected.value = linkedNpc;
 });
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -585,8 +625,71 @@ async function importProject(e: Event) {
   }
   input.value = "";
 }
+watch(selected, (id) => {
+  if (projectLoaded.value && route.value.startsWith("/studio"))
+    navigate("/studio" + (id ? "?npc=" + encodeURIComponent(id) : ""));
+});
+const deletingCharacter = ref<NPC | null>(null),
+  deletionName = ref(""),
+  deleteDialog = ref<HTMLDialogElement | null>(null);
+async function askDelete(n: NPC) {
+  deletingCharacter.value = n;
+  deletionName.value = "";
+  await nextTick();
+  deleteDialog.value?.showModal();
+}
+function cancelDelete() {
+  deleteDialog.value?.close();
+  deletingCharacter.value = null;
+}
+const photoUploading = ref("");
+async function updateCatalogPhoto(n: NPC, event: Event) {
+  const input = event.target as HTMLInputElement,
+    file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  photoUploading.value = n.id;
+  try {
+    const photo = await readCharacterPhoto(file);
+    const current = npcs.value.find((x) => x.id === n.id);
+    if (current) current.photo = photo;
+    notice.value = "Изображение персонажа заменено";
+  } catch (e) {
+    notice.value =
+      e instanceof Error ? e.message : "Ошибка загрузки изображения";
+  } finally {
+    photoUploading.value = "";
+  }
+}
+function chooseCatalogPhoto(event: Event) {
+  const button = event.currentTarget as HTMLElement;
+  button.parentElement
+    ?.querySelector<HTMLInputElement>("input[type=file]")
+    ?.click();
+}
+function confirmDelete() {
+  const target = deletingCharacter.value;
+  if (
+    !target ||
+    deletionName.value.trim() !== target.name ||
+    cloudWorking.value ||
+    busy.value ||
+    cloudConflict.value
+  )
+    return;
+  const next = removeCharacter(snapshotProject(), target.id);
+  npcs.value = next.npcs;
+  families.value = next.families;
+  dialogueLines.value = next.dialogueLines;
+  scenarios.value = next.scenarios;
+  if (selected.value === target.id) selected.value = npcs.value[0]?.id || "";
+  cancelDelete();
+  characterCatalog();
+  notice.value =
+    "Персонаж удалён. Сохранённые аудиодубли остались в библиотеке.";
+}
 function addNPC() {
-  window.location.hash = "/characters/new";
+  navigate("/characters/new");
 }
 async function generate() {
   if ((quotaPanel.value?.cooldown ?? 0) > 0) {
@@ -934,7 +1037,59 @@ function pauseOthers(e: Event) {
 
 <template>
   <ImageHoverPreview />
-  <div v-if="sessionChecking" class="login-shell"><p>Проверка входа…</p></div>
+  <Teleport to="body"
+    ><dialog
+      v-if="deletingCharacter"
+      ref="deleteDialog"
+      class="delete-character-dialog"
+      aria-labelledby="delete-character-title"
+      @cancel.prevent="cancelDelete"
+    >
+      <form @submit.prevent="confirmDelete">
+        <h2 id="delete-character-title">
+          Удалить {{ deletingCharacter.name }}?
+        </h2>
+        <p>
+          Будут удалены карточка, её реплики и связи в деревьях. Участие в
+          сценариях будет очищено. Тексты историй и сохранённые аудиодубли
+          останутся.
+        </p>
+        <label
+          >Введите имя и фамилию полностью<input
+            v-model="deletionName"
+            autofocus
+            autocomplete="off"
+            :placeholder="deletingCharacter.name"
+        /></label>
+        <div class="delete-dialog-actions">
+          <button type="button" @click="cancelDelete">Отмена</button
+          ><button
+            class="danger"
+            type="submit"
+            :disabled="
+              deletionName.trim() !== deletingCharacter.name ||
+              cloudWorking ||
+              busy ||
+              cloudConflict
+            "
+          >
+            Удалить персонажа
+          </button>
+        </div>
+      </form>
+    </dialog></Teleport
+  >
+  <div
+    v-if="authenticated && (!projectLoaded || routeLoading)"
+    class="route-loading-overlay"
+  >
+    <PageLoader
+      :label="!projectLoaded ? 'Загрузка проекта…' : 'Открываем страницу…'"
+    />
+  </div>
+  <div v-if="sessionChecking" class="login-shell">
+    <PageLoader label="Проверка входа…" />
+  </div>
   <section v-else-if="!authenticated" class="login-shell">
     <form class="login-card panel" @submit.prevent="login">
       <span class="eyebrow">FARM & FARLANDS</span>
@@ -1003,7 +1158,11 @@ function pauseOthers(e: Event) {
         @click="storyPage()"
       >
         События и конфликты</button
-      ><button :class="{ chosen: characterMode === 'settings' }" @click="settingsPage"><Settings2 :size="16" /> Настройки</button
+      ><button
+        :class="{ chosen: characterMode === 'settings' }"
+        @click="settingsPage"
+      >
+        <Settings2 :size="16" /> Настройки</button
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small
         >{{ npcs.length }} ПЕРСОНАЖЕЙ ·
@@ -1036,7 +1195,10 @@ function pauseOthers(e: Event) {
         >
       </div>
     </section>
-    <section v-if="characterMode === 'studio' || characterMode === 'dialogue'" class="game-style panel">
+    <section
+      v-if="characterMode === 'studio' || characterMode === 'dialogue'"
+      class="game-style panel"
+    >
       <label class="game-style-toggle"
         ><input v-model="gameCharacter" type="checkbox" /><span
           ><strong>Персонаж Farm & Farlands</strong
@@ -1054,11 +1216,19 @@ function pauseOthers(e: Event) {
       </details>
     </section>
     <section v-if="characterMode === 'settings'" class="settings-page">
-      <div class="panel"><h2>Настройки</h2><p>Учётная запись: {{ account?.username }}</p></div>
+      <div class="panel">
+        <h2>Настройки</h2>
+        <p>Учётная запись: {{ account?.username }}</p>
+      </div>
       <UserAdmin v-if="account?.role === 'admin'" :current-id="account.id" />
-      <p v-else class="panel">Управление пользователями доступно администратору.</p>
+      <p v-else class="panel">
+        Управление пользователями доступно администратору.
+      </p>
     </section>
-    <section v-else-if="characterMode === 'catalog'" class="character-catalog panel">
+    <section
+      v-else-if="characterMode === 'catalog'"
+      class="character-catalog panel"
+    >
       <div class="section-heading">
         <div>
           <span class="eyebrow">НАСЕЛЕНИЕ РЕГИОНА</span>
@@ -1087,12 +1257,26 @@ function pauseOthers(e: Event) {
       <div class="character-cards">
         <article v-for="n in filtered" :key="n.id" class="character-card">
           <div class="character-card-heading">
-            <span class="portrait small-portrait"
-              ><img v-if="n.photo" :src="n.photo" :alt="n.name" /><template
+            <button
+              type="button"
+              class="portrait small-portrait catalog-photo-button"
+              :disabled="photoUploading === n.id"
+              :aria-busy="photoUploading === n.id"
+              :aria-label="'Заменить фото ' + n.name"
+              @click="chooseCatalogPhoto"
+            >
+              <img v-if="n.photo" :src="n.photo" :alt="n.name" /><template
                 v-else
                 >{{ n.name.slice(0, 1) }}</template
-              ></span
-            >
+              >
+            </button>
+            <input
+              type="file"
+              class="visually-hidden"
+              accept="image/jpeg,image/png,image/webp"
+              :aria-label="'Фото ' + n.name"
+              @change="updateCatalogPhoto(n, $event)"
+            />
             <div>
               <h3>{{ n.name }}</h3>
               <small>{{ n.role || "Роль не указана" }}</small>
@@ -1123,6 +1307,13 @@ function pauseOthers(e: Event) {
             }}</small
           >
           <div class="character-card-actions">
+            <button
+              class="danger"
+              :aria-label="'Удалить ' + n.name"
+              @click="askDelete(n)"
+            >
+              <Trash2 :size="16" />
+            </button>
             <button @click="openCharacter(n.id)">Редактировать</button
             ><button
               @click="
@@ -1144,7 +1335,7 @@ function pauseOthers(e: Event) {
       :takes="takes"
       :urls="urls"
       :scenarios="scenarios"
-      :initial-scenario="characterHash.split('/')[2]"
+      :initial-scenario="characterHash.split('?')[0]!.split('/')[2]"
       :initial-npc="initialDialogueNpc"
       :busy="busy"
       @generate="generateLine"
@@ -1160,7 +1351,7 @@ function pauseOthers(e: Event) {
       :save-status="cloudWorking ? 'Сохраняется…' : cloudMessage"
       :npcs="npcs"
       :lines="dialogueLines"
-      :initial-id="characterHash.split('/')[2]"
+      :initial-id="characterHash.split('?')[0]!.split('/')[2]"
       @open-character="openCharacter"
       @open-lines="dialoguePage"
       @add-line="scenarioLine"
@@ -1190,6 +1381,7 @@ function pauseOthers(e: Event) {
       @open-lines="characterLines"
       @save="saveCharacter"
       @cancel="characterCatalog"
+      @delete="askDelete"
     />
     <section
       v-else-if="characterMode === 'edit'"
@@ -1222,7 +1414,7 @@ function pauseOthers(e: Event) {
         class="cast-row"
         @click="
           selected = n.id;
-          tab = 'studio';
+          voicePage('studio');
         "
       >
         <span class="cast-name"

@@ -1541,3 +1541,24 @@ footer {
     overscroll-behavior: contain;
   }
 }
+
+.page-loader { display:flex; align-items:center; justify-content:center; gap:16px; padding:44px 24px; min-height:160px; color:#d7c49e; }
+.loading-spinner { width:30px; height:30px; border:3px solid #dba74030; border-top-color:#e8b650; border-radius:50%; animation:studio-spin .8s linear infinite; }
+@keyframes studio-spin { to { transform:rotate(360deg); } }
+.route-loading-overlay { position:fixed; inset:0; z-index:80; display:grid; place-items:center; background:#111419ed; pointer-events:all; }
+.delete-character-dialog { position:fixed; inset:0; margin:auto; width:min(520px,calc(100vw - 32px)); max-height:90dvh; overflow:auto; padding:28px; border:1px solid #76564c; border-radius:16px; background:#1a2027; color:#e4e1d8; }
+.delete-character-dialog::backdrop { background:#05080dcb; backdrop-filter:blur(4px); }
+.delete-character-dialog h2 { margin:0 0 18px; }
+.delete-character-dialog p { line-height:1.65; margin-bottom:20px; }
+.delete-character-dialog label { display:grid; gap:10px; }
+.delete-dialog-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:12px; margin-top:24px; }
+button.danger { color:#f2aaa2; border-color:#a9675655; }
+button.danger:disabled { opacity:.35; cursor:not-allowed; }
+.character-card-heading .catalog-photo-button { width:84px; height:100px; min-width:84px; padding:0; overflow:hidden; cursor:pointer; border:1px solid #b9915944; }
+.character-card-heading .catalog-photo-button img { width:100%; height:100%; object-fit:cover; }
+.portrait-upload-button { position:relative; width:168px; min-width:168px; padding:0; overflow:hidden; border:1px solid #b9915966; border-radius:10px; display:flex; flex-direction:column; align-items:center; }
+.portrait-upload-button img { width:168px; height:196px; object-fit:contain; background:#10151b; }
+.portrait-upload-button small { display:block; width:100%; padding:8px; background:#28313a; color:#e4c58a; }
+.visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+@media (prefers-reduced-motion:reduce) { .loading-spinner { animation-duration:2s; } }
+@media(max-width:600px) { .portrait-upload-button { width:136px; min-width:136px; } .portrait-upload-button img { width:136px; height:164px; } }
