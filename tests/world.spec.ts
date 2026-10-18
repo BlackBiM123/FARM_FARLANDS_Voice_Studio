@@ -218,6 +218,82 @@ test("world editors and the real Godot Web core preserve lore and match headless
   await expect(page.getByLabel("Наблюдать", { exact: true })).toHaveValue(
     "npc_theo_hartley",
   );
+  const boundary = structuredClone(report);
+  boundary.state.minute = 43530;
+  const boundaryFile = page.waitForEvent("filechooser");
+  await page
+    .getByRole("button", { name: "Восстановить файл", exact: true })
+    .click();
+  await (
+    await boundaryFile
+  ).setFiles({
+    name: "boundary.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(boundary)),
+  });
+  await expect(page.locator(".world-run-controls strong").first()).toHaveText(
+    "День 31 · 05:30",
+  );
+  await page.getByRole("button", { name: "7 дней", exact: true }).click();
+  await expect(page.locator(".world-run-controls strong").first()).toHaveText(
+    "День 31 · 06:00",
+  );
+  await expect(
+    page.getByText(
+      "Достигнут предел запуска: 30 дней. Сохраните отчёт или создайте новый запуск.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Час", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Пуск", exact: true }),
+  ).toBeDisabled();
+  await page.evaluate(() => {
+    const original = indexedDB.open.bind(indexedDB);
+    (window as any).restoreWorldStorage = () =>
+      Object.defineProperty(indexedDB, "open", {
+        value: original,
+        configurable: true,
+      });
+    Object.defineProperty(indexedDB, "open", {
+      value: () => {
+        throw new Error("Storage blocked for test");
+      },
+      configurable: true,
+    });
+  });
+  await page.getByRole("button", { name: "Новый запуск", exact: true }).click();
+  await expect(
+    page.getByText(
+      "Локальное сохранение недоступно. Скачайте отчёт JSON или сохраните снимок в облако.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "7 дней", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Остановить прогон", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Прогон остановлен. Скачайте отчёт JSON: локальное сохранение не подтверждено.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Прогон остановлен. Последнее рассчитанное состояние сохранено локально.",
+      { exact: true },
+    ),
+  ).not.toBeVisible();
+  await page.evaluate(() => (window as any).restoreWorldStorage());
+  await page.getByRole("button", { name: "Час", exact: true }).click();
+  await expect(
+    page.getByText("Контрольная точка сохранена на этом устройстве.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   const stored = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("farlands-empty-studio-project")!),
   );
@@ -228,6 +304,27 @@ test("world editors and the real Godot Web core preserve lore and match headless
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
   await page.screenshot({ path: "../world-simulation-mobile.png" });
+  await page.goto("/world");
+  await page
+    .locator("summary")
+    .filter({ hasText: "Участники и начальные привязки" })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Отключить от симуляции Мартин Вейл",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page
+      .locator("summary")
+      .filter({ hasText: "Участники и начальные привязки" }),
+  ).toHaveText(/2/);
+  const afterDetach = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("farlands-empty-studio-project")!),
+  );
+  expect(afterDetach.npcs).toEqual(project.npcs);
+  expect(afterDetach.world.agents).toHaveLength(3);
   expect(
     logs.filter(
       (x) =>

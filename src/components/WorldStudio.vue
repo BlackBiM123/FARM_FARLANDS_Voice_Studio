@@ -84,6 +84,10 @@ const runs = ref<{ id: string; createdAt: string }[]>([]),
   localAvailable = ref<WorldReport | null>(null);
 const advanceCancelled = ref(false),
   advanceProgress = ref<{ done: number; total: number } | null>(null);
+const runFinished = computed(() => (report.value?.state.minute ?? 0) >= 43560);
+const localSaveState = ref<"none" | "saving" | "saved" | "failed">("none");
+const finishedNotice =
+  "Достигнут предел запуска: 30 дней. Сохраните отчёт или создайте новый запуск.";
 const choice = computed(() =>
     draft.value.places.find((p) => p.id === selected.value),
   ),
@@ -384,6 +388,9 @@ function addAccount() {
     balance: 0,
   });
 }
+function detachAgent(id: string) {
+  draft.value.agents = draft.value.agents.filter((a) => a.id !== id);
+}
 function addItem() {
   draft.value.items.push({
     id: "item_" + crypto.randomUUID().slice(0, 8),
@@ -571,14 +578,18 @@ async function applyReport(value: WorldReport) {
   report.value = value;
   if (!value.state.agents[selectedAgent.value])
     selectedAgent.value = Object.keys(value.state.agents)[0] ?? "";
+  localSaveState.value = "saving";
   try {
     await saveLocalReport(value);
+    localSaveState.value = "saved";
   } catch {
+    localSaveState.value = "failed";
     notice.value = "Хранилище браузера недоступно. Сохраните отчёт JSON.";
   }
 }
 async function newRun() {
   pause();
+  notice.value = "";
   if (!valid.value.success || !draft.value.agents.length) {
     error.value = "Проверьте определения мира и участников";
     return;
@@ -602,7 +613,15 @@ async function newRun() {
 }
 async function step(minutes: number) {
   if (busy.value) return;
+  minutes = Math.min(minutes, 43560 - (report.value?.state.minute ?? 360));
+  if (minutes <= 0) {
+    pause();
+    notice.value = "";
+    return;
+  }
   busy.value = true;
+  error.value = "";
+  notice.value = "";
   advanceCancelled.value = false;
   advanceProgress.value = { done: 0, total: minutes };
   try {
@@ -615,9 +634,14 @@ async function step(minutes: number) {
       if (done < minutes)
         await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    if (advanceCancelled.value)
+    if (runFinished.value) {
+      pause();
+      notice.value = "";
+    } else if (advanceCancelled.value)
       notice.value =
-        "Прогон остановлен. Последнее рассчитанное состояние сохранено локально.";
+        localSaveState.value === "saved"
+          ? "Прогон остановлен. Последнее рассчитанное состояние сохранено локально."
+          : "Прогон остановлен. Скачайте отчёт JSON: локальное сохранение не подтверждено.";
   } catch (e) {
     pause();
     error.value = String(e);
@@ -646,6 +670,8 @@ function play() {
 async function restoreRun(value: WorldReport) {
   pause();
   busy.value = true;
+  error.value = "";
+  notice.value = "";
   try {
     if ((await worldHash(value.definition)) !== value.contentHash)
       throw Error("Контрольная сумма определений не совпадает");
@@ -1064,6 +1090,7 @@ onUnmounted(() => {
                 <th>Аренда</th>
                 <th>Груз, кг · обычно 10</th>
                 <th>Цель: дом</th>
+                <th>Участие</th>
               </tr>
             </thead>
             <tbody>
@@ -1127,6 +1154,14 @@ onUnmounted(() => {
                   />
                 </td>
                 <td><input v-model="a.goalHouse" type="checkbox" /></td>
+                <td>
+                  <button
+                    :aria-label="'Отключить от симуляции ' + a.name"
+                    @click="detachAgent(a.id)"
+                  >
+                    Отключить
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -1134,6 +1169,10 @@ onUnmounted(() => {
         <button @click="addAgent">
           <Plus :size="15" />Подключить следующего NPC
         </button>
+        <p class="hint">
+          Отключение меняет только состав новых прогонов. Анкета, счета и уже
+          сохранённые запуски сохраняются.
+        </p>
       </details>
       <details class="panel world-section">
         <summary>Общие параметры и защищённые факты</summary>
@@ -1392,24 +1431,24 @@ onUnmounted(() => {
           ><button class="primary" :disabled="!ready || busy" @click="newRun">
             Новый запуск</button
           ><button
-            :disabled="!report || !ready || (!playing && busy)"
+            :disabled="!report || !ready || runFinished || (!playing && busy)"
             @click="play"
           >
             <Pause v-if="playing" :size="15" /><Play v-else :size="15" />{{
               playing ? "Пауза" : "Пуск"
             }}</button
           ><button
-            :disabled="!report || !ready || busy || playing"
+            :disabled="!report || !ready || runFinished || busy || playing"
             @click="step(60)"
           >
             Час</button
           ><button
-            :disabled="!report || !ready || busy || playing"
+            :disabled="!report || !ready || runFinished || busy || playing"
             @click="step(1440)"
           >
             День</button
           ><button
-            :disabled="!report || !ready || busy || playing"
+            :disabled="!report || !ready || runFinished || busy || playing"
             @click="step(10080)"
           >
             7 дней</button
@@ -1430,6 +1469,22 @@ onUnmounted(() => {
             <option :value="240">4 часа / шаг</option>
           </select>
         </div>
+        <p v-if="runFinished" class="world-notice" role="status">
+          {{ finishedNotice }}
+        </p>
+        <p
+          v-if="report"
+          :class="localSaveState === 'failed' ? 'world-error' : 'hint'"
+          role="status"
+        >
+          {{
+            localSaveState === "saved"
+              ? "Контрольная точка сохранена на этом устройстве."
+              : localSaveState === "failed"
+                ? "Локальное сохранение недоступно. Скачайте отчёт JSON или сохраните снимок в облако."
+                : "Сохраняем контрольную точку…"
+          }}
+        </p>
         <p class="hint">
           Определения фиксируются при создании запуска. Изменения редактора
           действуют только в новом прогоне. Максимум 30 дней на запуск. Большие

@@ -17,38 +17,61 @@ export function saveLocalReport(report: WorldReport) {
     req.onupgradeneeded = () => req.result.createObjectStore("runs");
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
-      const db = req.result,
-        tx = db.transaction("runs", "readwrite");
-      tx.objectStore("runs").put(JSON.parse(JSON.stringify(report)), "latest");
-      tx.oncomplete = () => {
+      const db = req.result;
+      try {
+        const tx = db.transaction("runs", "readwrite");
+        tx.objectStore("runs").put(
+          JSON.parse(JSON.stringify(report)),
+          "latest",
+        );
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onabort = tx.onerror = () => {
+          db.close();
+          reject(tx.error ?? new Error("Хранилище отменило сохранение"));
+        };
+      } catch (error) {
         db.close();
-        resolve();
-      };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
+        reject(error);
+      }
     };
   });
 }
 export function loadLocalReport() {
   return new Promise<WorldReport | null>((resolve) => {
-    const req = indexedDB.open("farlands-world-runs", 1);
+    let req: IDBOpenDBRequest;
+    try {
+      req = indexedDB.open("farlands-world-runs", 1);
+    } catch {
+      resolve(null);
+      return;
+    }
     req.onupgradeneeded = () => req.result.createObjectStore("runs");
     req.onerror = () => resolve(null);
     req.onsuccess = () => {
-      const db = req.result,
-        tx = db.transaction("runs", "readonly"),
-        get = tx.objectStore("runs").get("latest");
-      get.onsuccess = () => {
-        try {
-          resolve(get.result ? parseReport(get.result) : null);
-        } catch {
+      const db = req.result;
+      try {
+        const tx = db.transaction("runs", "readonly"),
+          get = tx.objectStore("runs").get("latest");
+        get.onsuccess = () => {
+          try {
+            resolve(get.result ? parseReport(get.result) : null);
+          } catch {
+            resolve(null);
+          }
+        };
+        get.onerror = () => resolve(null);
+        tx.oncomplete = () => db.close();
+        tx.onabort = tx.onerror = () => {
+          db.close();
           resolve(null);
-        }
-      };
-      get.onerror = () => resolve(null);
-      tx.oncomplete = () => db.close();
+        };
+      } catch {
+        db.close();
+        resolve(null);
+      }
     };
   });
 }
