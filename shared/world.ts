@@ -261,7 +261,9 @@ const stateSchema = z.object({
 export const reportSchema = z
   .object({
     version: z.literal(1),
-    rulesVersion: z.union([z.literal(2), z.literal(3)]).optional(),
+    rulesVersion: z
+      .union([z.literal(2), z.literal(3), z.literal(4)])
+      .optional(),
     coreVersion: z.literal("farlands-core-1"),
     contentHash: z.string().min(1).max(128),
     definition: worldSchema,

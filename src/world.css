@@ -462,3 +462,32 @@
   line-height: 1.6;
   margin: 8px 0;
 }
+.world-transport-plans {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+.world-transport-plans button {
+  display: grid;
+  gap: 5px;
+  padding: 12px 16px;
+  text-align: left;
+  min-width: 210px;
+  max-width: 100%;
+  background: #dab7790b;
+  border-color: #dab77935;
+}
+.world-transport-plans span {
+  font-size: 12px;
+}
+.world-transport-plans small {
+  color: #b7ad99;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .world-transport-plans button {
+    width: 100%;
+    min-width: 0;
+  }
+}

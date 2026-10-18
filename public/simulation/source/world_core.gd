@@ -96,7 +96,7 @@ func restore(report: Dictionary) -> bool:
 	return true
 
 func snapshot() -> Dictionary:
-	return {"version":1,"rulesVersion":3,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
+	return {"version":1,"rulesVersion":4,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
 
 func advance(minutes: int) -> Dictionary:
 	error = ""
@@ -172,6 +172,9 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	if not _reachable(a.place,a.home): sleep_score=-1
 	if not _reachable(a.place,house.place): buy_score=-1
 	if not _reachable(a.place,"tavern"): social_score=-1
+	if state.ledger.has("social:"+npc.id+":"+str(_day())): social_score=-1
+	if _job_claimed("pickup",npc.id): delivery_score=-1
+	if _job_claimed("import_pickup",npc.id): import_score=-1
 	if not _reachable(a.place,definition.production.place) or not _reachable(definition.production.place,"tavern"): delivery_score=-1
 	if not _reachable(a.place,"pier") or not _reachable("pier","tavern"): import_score=-1
 	if 10*_weight("potato")>float(npc.get("carryCapacity",10)): import_score=-1
@@ -234,6 +237,8 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 				a.cargo={"item":"potato","amount":10,"owner":"outside","source":source}
 				_event("pickup",npc.id,a.place,"Погружено 10 картофеля: товар остаётся собственностью продавца до оплаты")
 				_at(npc,a,"tavern",{"type":"deliver","remaining":10})
+			else:
+				_event("plan_failed",npc.id,a.place,"Погрузка отменена: запас, грузоподъёмность или другая перевозка изменились. NPC выберет новое дело.")
 		"travel":
 			a.place = action.to
 			a.action = action.after
@@ -264,6 +269,8 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 				state.ledger.append("delivery:"+str(_day()))
 				a.cargo={"item":pr.output,"amount":2,"owner":pr.owner,"source":stock}
 				_at(npc,a,"tavern",{"type":"deliver","remaining":5})
+			else:
+				_event("plan_failed",npc.id,a.place,"Погрузка отменена: груз уже забрали, дневной заказ выполнен или превышен допустимый вес.")
 		"deliver":
 			if a.has("cargo"):
 				var cargo: Dictionary = a.cargo
@@ -273,6 +280,7 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 					_event("delivery",npc.id,a.place,"Доставлено: "+str(cargo.item)+" × "+str(cargo.amount)+". Товар оплачен получателем.")
 				else:
 					# Неоплаченный груз остаётся у перевозчика; возвращается по реальному пути.
+					_event("plan_failed",npc.id,a.place,"Получатель не может принять и оплатить груз. Возврат владельцу по исходному маршруту.")
 					_at(npc,a,_stock_place(cargo.source),{"type":"return_cargo","remaining":5})
 					return
 				a.erase("cargo")
@@ -299,6 +307,7 @@ func _meet(npc: Dictionary, a: Dictionary) -> void:
 		if other.id==npc.id:
 			continue
 		var b: Dictionary=state.agents[other.id]
+		if state.ledger.has("social:"+other.id+":"+str(_day())): continue
 		if b.place==a.place and (b.action.is_empty() or b.action.type in ["idle","meet"]):
 			state.ledger.append(key)
 			state.ledger.append("social:"+other.id+":"+str(_day()))
@@ -422,6 +431,15 @@ func _stock_place(stock_id: String) -> String:
 func _cargo_in_transit(item: String) -> bool:
 	for a in state.agents.values():
 		if a.get("cargo",{}).get("item","")==item: return true
+	return false
+func _job_claimed(action_type: String,except_actor: String) -> bool:
+	# Намерение хранится в том же действии, что и путешествие. Второй реестр
+	# резерваций не нужен: снимок уже содержит маршрут и действие после прибытия.
+	for actor in state.agents.values():
+		if actor.id==except_actor: continue
+		var action: Dictionary=actor.action
+		var pending: Dictionary=action.get("after",{}) if action.get("type","")=="travel" else action
+		if pending.get("type","")==action_type: return true
 	return false
 func _reachable(from: String,to: String) -> bool:
 	return _exists(to) and (from==to or not _path(from,to).is_empty())

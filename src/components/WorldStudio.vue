@@ -148,6 +148,7 @@ const cargoWeight = computed(() =>
     : 0,
 );
 const eventLabels: Record<string, string> = {
+  plan_failed: "План изменился",
   obligation: "Начисление",
   decision: "Решение NPC",
   import: "Внешний рынок",
@@ -189,6 +190,36 @@ const outstanding = computed(() =>
 );
 const personalObligations = computed(() =>
   outstanding.value.filter((d) => d.actor === inspect.value?.id),
+);
+function transportPlan(a: WorldAgent) {
+  const action = a.action;
+  const pending = action.type === "travel" ? action.after : action;
+  if (a.cargo)
+    return {
+      title:
+        pending?.type === "return_cargo"
+          ? "Возврат груза владельцу"
+          : "Доставка груза получателю",
+      phase: `${a.cargo.item} × ${a.cargo.amount} · ${action.type === "travel" ? "в пути" : "разгрузка"}`,
+    };
+  if (pending?.type === "import_pickup")
+    return {
+      title: "Поставка еды с причала",
+      phase:
+        action.type === "travel" ? "Идёт за закреплённым заказом" : "Погрузка",
+    };
+  if (pending?.type === "pickup")
+    return {
+      title: "Перевозка продукции фермы",
+      phase:
+        action.type === "travel" ? "Идёт за закреплённым заказом" : "Погрузка",
+    };
+  return null;
+}
+const transportPlans = computed(() =>
+  agents.value
+    .map((a) => ({ actor: a.id, plan: transportPlan(a) }))
+    .filter((row) => row.plan),
 );
 function accountName(id: string) {
   return activeWorld.value.accounts.find((a) => a.id === id)?.name ?? id;
@@ -603,9 +634,9 @@ async function restoreRun(value: WorldReport) {
       throw Error("Контрольная сумма определений не совпадает");
     await applyReport(await command("restore", { report: value }));
     notice.value =
-      value.rulesVersion === 3
+      value.rulesVersion === 4
         ? "Запуск восстановлен. Авторские анкеты не менялись."
-        : "Старый снимок восстановлен. Продолжение использует правила 3: начисления и задолженности. Пропущенные долги прошлого не восстанавливаются задним числом. Для сравнения результатов создайте новый запуск.";
+        : "Старый снимок восстановлен. Продолжение использует правила 4: закрепление перевозок и пересмотр планов. Старые долги задним числом не создаются. Для сравнения результатов создайте новый запуск.";
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -1449,6 +1480,21 @@ onUnmounted(() => {
           <summary>Требует внимания · {{ alerts.length }}</summary>
           <p v-for="message in alerts" :key="message">{{ message }}</p>
         </details>
+        <div
+          v-if="transportPlans.length"
+          class="world-transport-plans"
+          aria-label="Действующие планы перевозок"
+        >
+          <button
+            v-for="row in transportPlans"
+            :key="row.actor"
+            @click="selectedAgent = row.actor"
+          >
+            <strong>{{ agentName(row.actor) }}</strong
+            ><span>{{ row.plan!.title }}</span
+            ><small>{{ row.plan!.phase }}</small>
+          </button>
+        </div>
         <div class="world-layout">
           <div class="panel world-map-panel">
             <svg
@@ -1594,6 +1640,13 @@ onUnmounted(() => {
                   (100 * inspect.action.elapsed) / inspect.action.total,
                 )
               }}%
+            </p>
+            <p v-if="inspect.action.type === 'travel'">
+              <strong>После прибытия:</strong>
+              {{
+                actionLabels[inspect.action.after?.type] ||
+                "Следующий этап плана"
+              }}
             </p>
             <p v-if="inspect.cargo">
               <strong>Груз:</strong> {{ inspect.cargo.item }} ×

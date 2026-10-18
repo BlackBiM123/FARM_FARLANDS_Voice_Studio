@@ -44,6 +44,37 @@ func _initialize() -> void:
 	check(f.state.agents[world.agents[0].id].place==world.agents[0].home,"Закрытые дороги не телепортируют NPC")
 	conservation(f.snapshot())
 	var long_run=Core.new()
+	var jobs_world=world.duplicate(true)
+	jobs_world.agents[1].role="stable"
+	for stock in jobs_world.stocks:
+		if stock.id=="food_inn": stock.amount=0
+	var jobs=Core.new()
+	jobs.start(jobs_world,"claims")
+	jobs.state.minute=480
+	jobs._choose(jobs_world.agents[0],jobs.state.agents[jobs_world.agents[0].id])
+	check(jobs._job_claimed("import_pickup",jobs_world.agents[1].id),"Заказ закреплён уже во время пути к погрузке")
+	jobs._choose(jobs_world.agents[1],jobs.state.agents[jobs_world.agents[1].id])
+	var second_action: Dictionary=jobs.state.agents[jobs_world.agents[1].id].action
+	check(second_action.get("after",second_action).get("type","")!="import_pickup","Второй перевозчик не идёт за тем же заказом")
+	var jobs_copy=Core.new()
+	check(jobs_copy.restore(jobs.snapshot()),"Снимок с закреплённой перевозкой принят")
+	check(jobs_copy._job_claimed("import_pickup",jobs_world.agents[1].id),"Загрузка не освобождает чужой заказ")
+	# Пока перевозчик шёл, внешний запас израсходован другим участником рынка.
+	for sim in [jobs,jobs_copy]:
+		var removed=int(sim.state.stocks.external_food)
+		sim.state.stocks.external_food=0
+		sim.state.consumed.potato=int(sim.state.consumed.get("potato",0))+removed
+		sim.advance(90)
+	check(jobs.state.events.any(func(event): return event.type=="plan_failed" and event.actor==jobs_world.agents[0].id),"Срыв погрузки объяснён событием")
+	check(not jobs._job_claimed("import_pickup",jobs_world.agents[1].id),"Отменённый заказ освобождён")
+	check(JSON.stringify(jobs.state,"",true)==JSON.stringify(jobs_copy.state,"",true),"Пересмотр плана после восстановления совпадает")
+	conservation(jobs.snapshot())
+	var meetings=Core.new()
+	meetings.start(world,"meetings")
+	for actor in meetings.state.agents.values(): actor.place="tavern"
+	meetings.state.ledger.append("social:"+world.agents[1].id+":0")
+	meetings._meet(world.agents[0],meetings.state.agents[world.agents[0].id])
+	check(meetings.state.agents[world.agents[0].id].action.get("other","")==world.agents[2].id,"Участник с завершённой дневной встречей не назначается повторно")
 	# Нехватка денег работодателя не отменяет уже заработанную зарплату.
 	var poor_world=world.duplicate(true)
 	for wallet in poor_world.accounts:
