@@ -84,7 +84,11 @@ const runs = ref<{ id: string; createdAt: string }[]>([]),
 const choice = computed(() =>
     draft.value.places.find((p) => p.id === selected.value),
   ),
-  activeWorld = computed(() => props.page === "simulation" && report.value ? report.value.definition : draft.value);
+  activeWorld = computed(() =>
+    props.page === "simulation" && report.value
+      ? report.value.definition
+      : draft.value,
+  );
 const dirty = computed(
   () => JSON.stringify(draft.value) !== JSON.stringify(model.value),
 );
@@ -697,7 +701,7 @@ onUnmounted(() => {
           </div>
           <svg
             class="world-map"
-            :viewBox="`${pan.x} ${pan.y} ${1000 / zoom} ${1000 / zoom}`"
+            :viewBox="`${pan.x * 1.5} ${pan.y} ${1500 / zoom} ${1000 / zoom}`"
             preserveAspectRatio="none"
             @pointerdown="panDown"
             @pointermove="move"
@@ -720,15 +724,15 @@ onUnmounted(() => {
             />
             <g v-for="i in 9" :key="i">
               <rect
-                :x="((i - 1) % 3) * 333.33"
+                :x="((i - 1) % 3) * 500"
                 :y="Math.floor((i - 1) / 3) * 333.33"
-                width="333.33"
+                width="500"
                 height="333.33"
                 fill="transparent"
                 stroke="#d4b37630"
               />
               <text
-                :x="((i - 1) % 3) * 333.33 + 14"
+                :x="((i - 1) % 3) * 500 + 14"
                 :y="Math.floor((i - 1) / 3) * 333.33 + 28"
                 fill="#a8936c"
                 font-size="18"
@@ -739,9 +743,9 @@ onUnmounted(() => {
             <line
               v-for="r in draft.routes"
               :key="r.id"
-              :x1="point(r.from).x"
+              :x1="point(r.from).x * 1.5"
               :y1="point(r.from).y"
-              :x2="point(r.to).x"
+              :x2="point(r.to).x * 1.5"
               :y2="point(r.to).y"
               :stroke="r.open ? '#bc995d' : '#914d4d'"
               :stroke-dasharray="r.open ? '' : '8 6'"
@@ -758,14 +762,20 @@ onUnmounted(() => {
               @pointerdown.stop="down($event, p.id)"
             >
               <circle
-                :cx="p.x"
+                :cx="p.x * 1.5"
                 :cy="p.y"
                 :r="selected === p.id ? 12 : 9"
                 :fill="p.exists ? '#e9b452' : '#686970'"
                 stroke="#24242b"
                 stroke-width="3"
               />
-              <text :x="p.x + 16" :y="p.y - 10" font-size="15" fill="#f2e7ce">
+              <text
+                :x="p.x * 1.5 + (p.x > 800 ? -16 : 16)"
+                :text-anchor="p.x > 800 ? 'end' : 'start'"
+                :y="p.y - 10"
+                font-size="15"
+                fill="#f2e7ce"
+              >
                 {{ p.name }}
               </text>
             </g>
@@ -1336,20 +1346,20 @@ onUnmounted(() => {
           <div class="panel world-map-panel">
             <svg
               class="world-map"
-              viewBox="0 0 1000 1000"
+              viewBox="0 0 1500 1000"
               preserveAspectRatio="none"
             >
               <g v-for="i in 9" :key="i">
                 <rect
-                  :x="((i - 1) % 3) * 333.33"
+                  :x="((i - 1) % 3) * 500"
                   :y="Math.floor((i - 1) / 3) * 333.33"
-                  width="333.33"
+                  width="500"
                   height="333.33"
                   fill="transparent"
                   stroke="#d4b37630"
                 />
                 <text
-                  :x="((i - 1) % 3) * 333.33 + 12"
+                  :x="((i - 1) % 3) * 500 + 12"
                   :y="Math.floor((i - 1) / 3) * 333.33 + 25"
                   fill="#a8936c"
                   font-size="18"
@@ -1360,16 +1370,22 @@ onUnmounted(() => {
               <line
                 v-for="r in activeWorld.routes"
                 :key="r.id"
-                :x1="point(r.from).x"
+                :x1="point(r.from).x * 1.5"
                 :y1="point(r.from).y"
-                :x2="point(r.to).x"
+                :x2="point(r.to).x * 1.5"
                 :y2="point(r.to).y"
                 :stroke="r.open ? '#bc995d' : '#914d4d'"
                 stroke-width="3"
               />
               <g v-for="p in activeWorld.places" :key="p.id">
-                <circle :cx="p.x" :cy="p.y" r="7" fill="#b5a07e" />
-                <text :x="p.x + 10" :y="p.y - 10" font-size="15" fill="#c8bda8">
+                <circle :cx="p.x * 1.5" :cy="p.y" r="7" fill="#b5a07e" />
+                <text
+                  :x="p.x * 1.5 + (p.x > 800 ? -10 : 10)"
+                  :text-anchor="p.x > 800 ? 'end' : 'start'"
+                  :y="p.y - 10"
+                  font-size="15"
+                  fill="#c8bda8"
+                >
                   {{ p.name }}
                 </text>
               </g>
@@ -1383,13 +1399,13 @@ onUnmounted(() => {
                 @keydown.enter="selectedAgent = a.id"
               >
                 <circle
-                  :cx="npcPoint(a, i).x"
+                  :cx="npcPoint(a, i).x * 1.5"
                   :cy="npcPoint(a, i).y"
                   r="14"
                   :fill="a.id === inspect?.id ? '#fac65e' : '#89b5a2'"
                 />
                 <text
-                  :x="npcPoint(a, i).x + 18"
+                  :x="npcPoint(a, i).x * 1.5 + 18"
                   :y="npcPoint(a, i).y + 8"
                   font-size="16"
                   fill="white"
