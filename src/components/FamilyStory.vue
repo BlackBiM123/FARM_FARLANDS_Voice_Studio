@@ -10,7 +10,13 @@ const activeTab = ref(0);
 const entryTab = ref(0);
 const entries = computed(() => props.family.storyEntries || []);
 const activeEntry = computed(() => entries.value[entryTab.value - 1]);
-const entryTabs = computed(() => ["История семьи", ...entries.value.map(e => e.title), ...(props.family.storyDiscoveryNotes ? ["Раскрытие историй"] : [])]);
+const entryTabs = computed(() => [
+  props.family.kind && props.family.kind !== "family"
+    ? "История группы"
+    : "История семьи",
+  ...entries.value.map((e) => e.title),
+  ...(props.family.storyDiscoveryNotes ? ["Раскрытие историй"] : []),
+]);
 function entryKeys(event: KeyboardEvent, index: number) {
   const length = entryTabs.value.length;
   let next = index;
@@ -19,11 +25,18 @@ function entryKeys(event: KeyboardEvent, index: number) {
   else if (event.key === "Home") next = 0;
   else if (event.key === "End") next = length - 1;
   else return;
-  event.preventDefault(); entryTab.value = next;
+  event.preventDefault();
+  entryTab.value = next;
   document.getElementById("entry-tab-" + next)?.focus();
 }
-const knowledgeLabels = {unknown:"Неизвестен", heard:"Услышан", confirmed:"Подтверждён"};
-const hasVersions = computed(() => props.family.id === "fe4a77f0-47b5-49b5-9773-e0888d7af1c7");
+const knowledgeLabels = {
+  unknown: "Неизвестен",
+  heard: "Услышан",
+  confirmed: "Подтверждён",
+};
+const hasVersions = computed(
+  () => props.family.id === "fe4a77f0-47b5-49b5-9773-e0888d7af1c7",
+);
 const version = computed(() => brooksStoryVersions[activeTab.value - 1]);
 function selectTab(index: number) {
   activeTab.value = index;
@@ -103,7 +116,11 @@ onUnmounted(() => previousFocus?.focus());
         <div>
           <BookOpen :size="24" aria-hidden="true" />
           <div>
-            <small>ИСТОРИЯ СЕМЬИ</small>
+            <small>{{
+              family.kind && family.kind !== "family"
+                ? "ИСТОРИЯ ГРУППЫ"
+                : "ИСТОРИЯ СЕМЬИ"
+            }}</small>
             <h2 id="family-story-title">{{ family.name }}</h2>
           </div>
         </div>
@@ -111,49 +128,147 @@ onUnmounted(() => previousFocus?.focus());
           <X :size="22" aria-hidden="true" />
         </button>
       </header>
-      <div v-if="entries.length" class="family-version-tabs" role="tablist" aria-label="История и рассказы">
-        <button v-for="(title, index) in entryTabs" :id="'entry-tab-' + index" :key="index" role="tab"
-          :aria-selected="entryTab === index" :tabindex="entryTab === index ? 0 : -1"
-          :aria-controls="index === 0 ? 'story-original-panel' : 'family-entry-panel'"
-          @click="entryTab = index" @keydown="entryKeys($event, index)">{{ title }}</button>
-      </div>
-      <div v-if="entries.length && entryTab > 0" :key="entryTab" id="family-entry-panel" role="tabpanel"
-        :aria-labelledby="'entry-tab-' + entryTab" tabindex="0" class="family-version-panel">
-        <template v-if="activeEntry">
-          <h3>{{ activeEntry.title }}</h3>
-          <p class="version-step">Начальное знание игрока: {{ knowledgeLabels[activeEntry.initialKnowledge] }}</p>
-          <p class="version-note">Неизвестен → услышан → подтверждён. Это начальные настройки истории; игровой прогресс хранится в сохранении игры.</p>
-          <h4>Условие подтверждения</h4><p>{{ activeEntry.confirmationRule }}</p>
-          <div class="family-entry-text"><p v-for="(paragraph, i) in activeEntry.text.split(/\n+/).filter(Boolean)" :key="i" style="margin: 0 0 16px; line-height: 1.85">{{ paragraph }}</p></div>
-        </template>
-        <template v-else><h3>Раскрытие историй</h3><div class="family-entry-text"><p v-for="(paragraph, i) in (family.storyDiscoveryNotes || '').split(/\n+/).filter(Boolean)" :key="i" style="margin: 0 0 16px; line-height: 1.85">{{ paragraph }}</p></div></template>
-      </div>
-      <div v-if="hasVersions" class="family-version-tabs" role="tablist" aria-label="Версии истории">
-        <button v-for="index in 7" :key="index" :id="`story-tab-${index - 1}`" role="tab"
-          :aria-selected="activeTab === index - 1" :tabindex="activeTab === index - 1 ? 0 : -1"
-          :aria-controls="index === 1 ? 'story-original-panel' : 'story-version-panel'"
-          @click="selectTab(index - 1)" @keydown="tabKeys($event, index - 1)">
-          {{ index === 1 ? 'Исходная история' : `Семья ${index - 1}` }}
+      <div
+        v-if="entries.length"
+        class="family-version-tabs"
+        role="tablist"
+        aria-label="История и рассказы"
+      >
+        <button
+          v-for="(title, index) in entryTabs"
+          :id="'entry-tab-' + index"
+          :key="index"
+          role="tab"
+          :aria-selected="entryTab === index"
+          :tabindex="entryTab === index ? 0 : -1"
+          :aria-controls="
+            index === 0 ? 'story-original-panel' : 'family-entry-panel'
+          "
+          @click="entryTab = index"
+          @keydown="entryKeys($event, index)"
+        >
+          {{ title }}
         </button>
       </div>
-      <div v-if="hasVersions && version" :key="activeTab" id="story-version-panel" role="tabpanel"
-        :aria-labelledby="`story-tab-${activeTab}`" tabindex="0" class="family-version-panel">
-        <p class="version-step">Этап {{ activeTab }} из 6 · {{ version.impression }}</p>
+      <div
+        v-if="entries.length && entryTab > 0"
+        :key="entryTab"
+        id="family-entry-panel"
+        role="tabpanel"
+        :aria-labelledby="'entry-tab-' + entryTab"
+        tabindex="0"
+        class="family-version-panel"
+      >
+        <template v-if="activeEntry">
+          <h3>{{ activeEntry.title }}</h3>
+          <p class="version-step">
+            Начальное знание игрока:
+            {{ knowledgeLabels[activeEntry.initialKnowledge] }}
+          </p>
+          <p class="version-note">
+            Неизвестен → услышан → подтверждён. Это начальные настройки истории;
+            игровой прогресс хранится в сохранении игры.
+          </p>
+          <h4>Условие подтверждения</h4>
+          <p>{{ activeEntry.confirmationRule }}</p>
+          <div class="family-entry-text">
+            <p
+              v-for="(paragraph, i) in activeEntry.text
+                .split(/\n+/)
+                .filter(Boolean)"
+              :key="i"
+              style="margin: 0 0 16px; line-height: 1.85"
+            >
+              {{ paragraph }}
+            </p>
+          </div>
+        </template>
+        <template v-else
+          ><h3>Раскрытие историй</h3>
+          <div class="family-entry-text">
+            <p
+              v-for="(paragraph, i) in (family.storyDiscoveryNotes || '')
+                .split(/\n+/)
+                .filter(Boolean)"
+              :key="i"
+              style="margin: 0 0 16px; line-height: 1.85"
+            >
+              {{ paragraph }}
+            </p>
+          </div></template
+        >
+      </div>
+      <div
+        v-if="hasVersions"
+        class="family-version-tabs"
+        role="tablist"
+        aria-label="Версии истории"
+      >
+        <button
+          v-for="index in 7"
+          :key="index"
+          :id="`story-tab-${index - 1}`"
+          role="tab"
+          :aria-selected="activeTab === index - 1"
+          :tabindex="activeTab === index - 1 ? 0 : -1"
+          :aria-controls="
+            index === 1 ? 'story-original-panel' : 'story-version-panel'
+          "
+          @click="selectTab(index - 1)"
+          @keydown="tabKeys($event, index - 1)"
+        >
+          {{ index === 1 ? "Исходная история" : `Семья ${index - 1}` }}
+        </button>
+      </div>
+      <div
+        v-if="hasVersions && version"
+        :key="activeTab"
+        id="story-version-panel"
+        role="tabpanel"
+        :aria-labelledby="`story-tab-${activeTab}`"
+        tabindex="0"
+        class="family-version-panel"
+      >
+        <p class="version-step">
+          Этап {{ activeTab }} из 6 · {{ version.impression }}
+        </p>
         <h3>{{ version.title }}</h3>
-        <p class="version-note">Рекомендуемый порядок раскрытия, а не даты событий. Игрок начинает без собственной версии. Семьи пока обозначены условно; их назначим после проработки жителей города.</p>
-        <h4>История, в которую верит семья</h4><p>{{ version.story }}</p>
-        <h4>Кто рассказывает</h4><p>{{ version.source }}</p>
-        <h4>Почему игрок верит</h4><p>{{ version.evidence }}</p>
-        <h4>Что выяснить в квесте</h4><p>{{ version.quest }}</p>
-        <h4>Истина и искажения · для автора</h4><p>{{ version.truth }}</p>
-        <h4>{{ activeTab === 6 ? 'Итог раскрытия' : 'Вопрос к следующему этапу' }}</h4><p>{{ version.next }}</p>
+        <p class="version-note">
+          Рекомендуемый порядок раскрытия, а не даты событий. Игрок начинает без
+          собственной версии. Семьи пока обозначены условно; их назначим после
+          проработки жителей города.
+        </p>
+        <h4>История, в которую верит семья</h4>
+        <p>{{ version.story }}</p>
+        <h4>Кто рассказывает</h4>
+        <p>{{ version.source }}</p>
+        <h4>Почему игрок верит</h4>
+        <p>{{ version.evidence }}</p>
+        <h4>Что выяснить в квесте</h4>
+        <p>{{ version.quest }}</p>
+        <h4>Истина и искажения · для автора</h4>
+        <p>{{ version.truth }}</p>
+        <h4>
+          {{ activeTab === 6 ? "Итог раскрытия" : "Вопрос к следующему этапу" }}
+        </h4>
+        <p>{{ version.next }}</p>
         <div class="version-navigation">
-          <button @click="selectTab(activeTab - 1)">{{ activeTab === 1 ? 'К исходной истории' : 'Предыдущий этап' }}</button>
-          <button v-if="activeTab < 6" @click="selectTab(activeTab + 1)">Следующий этап →</button>
+          <button @click="selectTab(activeTab - 1)">
+            {{ activeTab === 1 ? "К исходной истории" : "Предыдущий этап" }}
+          </button>
+          <button v-if="activeTab < 6" @click="selectTab(activeTab + 1)">
+            Следующий этап →
+          </button>
         </div>
       </div>
-      <div v-show="(!hasVersions || activeTab === 0) && (!entries.length || entryTab === 0)" id="story-original-panel"
-        :role="hasVersions ? 'tabpanel' : undefined" :aria-labelledby="hasVersions ? 'story-tab-0' : undefined"
+      <div
+        v-show="
+          (!hasVersions || activeTab === 0) &&
+          (!entries.length || entryTab === 0)
+        "
+        id="story-original-panel"
+        :role="hasVersions ? 'tabpanel' : undefined"
+        :aria-labelledby="hasVersions ? 'story-tab-0' : undefined"
         class="family-story-layout"
         :class="{ 'is-empty': !chapters.length }"
       >
@@ -216,16 +331,58 @@ onUnmounted(() => previousFocus?.focus());
   </Teleport>
 </template>
 <style>
-.family-version-tabs { display: flex; gap: 8px; overflow-x: auto; flex: 0 0 auto; padding: 12px 16px; border-bottom: 1px solid #ffffff14; }
-.family-version-tabs button { flex: 0 0 auto; white-space: nowrap; }
-.family-version-tabs [aria-selected="true"] { background: #60472a; color: #ffe0aa; border-color: #c6a66f; }
-.family-version-panel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 28px clamp(20px, 5vw, 68px) 48px; line-height: 1.8; }
-.family-version-panel h3 { color: #efcf96; font-size: 27px; margin: 12px 0; }
-.family-version-panel h4 { color: #debe89; margin: 28px 0 8px; font-size: 18px; }
-.family-version-panel p { max-width: 780px; }
-.version-step { color: #efcf96; font-size: 14px; }
-.version-note { color: #b8b1a6; font-size: 13px; }
-.version-navigation { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.family-version-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-bottom: 1px solid #ffffff14;
+}
+.family-version-tabs button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.family-version-tabs [aria-selected="true"] {
+  background: #60472a;
+  color: #ffe0aa;
+  border-color: #c6a66f;
+}
+.family-version-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 28px clamp(20px, 5vw, 68px) 48px;
+  line-height: 1.8;
+}
+.family-version-panel h3 {
+  color: #efcf96;
+  font-size: 27px;
+  margin: 12px 0;
+}
+.family-version-panel h4 {
+  color: #debe89;
+  margin: 28px 0 8px;
+  font-size: 18px;
+}
+.family-version-panel p {
+  max-width: 780px;
+}
+.version-step {
+  color: #efcf96;
+  font-size: 14px;
+}
+.version-note {
+  color: #b8b1a6;
+  font-size: 13px;
+}
+.version-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
 
 .family-chapter-illustration {
   margin: 0 0 30px;

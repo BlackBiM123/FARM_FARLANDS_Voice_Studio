@@ -2,15 +2,25 @@ import { z } from "zod";
 export const familySchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(80),
+  kind: z
+    .enum(["family", "household", "expedition", "organization"])
+    .optional(),
   description: z.string().max(3000),
   story: z.string().max(100000).optional(),
-  storyEntries: z.array(z.object({
-    key: z.string().min(1).max(100),
-    title: z.string().min(1).max(200),
-    text: z.string().max(30000),
-    initialKnowledge: z.enum(["unknown", "heard", "confirmed"]).default("unknown"),
-    confirmationRule: z.string().max(3000),
-  })).max(30).optional(),
+  storyEntries: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(100),
+        title: z.string().min(1).max(200),
+        text: z.string().max(30000),
+        initialKnowledge: z
+          .enum(["unknown", "heard", "confirmed"])
+          .default("unknown"),
+        confirmationRule: z.string().max(3000),
+      }),
+    )
+    .max(30)
+    .optional(),
   storyDiscoveryNotes: z.string().max(20000).optional(),
   storyIllustrations: z
     .array(
@@ -59,6 +69,8 @@ export const familySchema = z.object({
 });
 export type Family = z.infer<typeof familySchema>;
 export function familyError(family: Family): string {
+  if (family.kind && family.kind !== "family" && family.links.length)
+    return "Для группы используйте отношения в анкетах, а не родственные связи.";
   const members = new Set(family.members);
   if (members.size !== family.members.length) return "Участник добавлен дважды";
   const seen = new Set<string>();

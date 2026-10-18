@@ -225,7 +225,7 @@ function move(e: PointerEvent) {
     <div class="character-page-heading">
       <div>
         <span class="eyebrow">FAMILY WORKSHOP</span>
-        <h2>Семьи и родословные</h2>
+        <h2>Семьи и группы</h2>
         <p>Родители сверху, дети ниже. Пары соединены горизонтально.</p>
       </div>
       <button class="primary" @click="open()">Создать семью</button>
@@ -259,6 +259,14 @@ function move(e: PointerEvent) {
       <p v-if="error" class="character-error" role="alert">{{ error }}</p>
       <section class="panel family-meta">
         <label
+          >Тип группы<select v-model="draft.kind">
+            <option :value="undefined">Семья</option>
+            <option value="household">Домохозяйство</option>
+            <option value="expedition">Экспедиция</option>
+            <option value="organization">Организация</option>
+          </select></label
+        >
+        <label
           >Название семьи<input v-model="draft.name" maxlength="80" /></label
         ><label
           >Место проживания<input v-model="draft.home" maxlength="200" /></label
@@ -271,7 +279,13 @@ function move(e: PointerEvent) {
         ><small>Изменения применяются после сохранения.</small>
       </section>
       <section class="panel">
-        <h3>Участники семьи</h3>
+        <h3>
+          {{
+            !draft.kind || draft.kind === "family"
+              ? "Участники семьи"
+              : "Участники группы"
+          }}
+        </h3>
         <p v-if="!npcs.length">
           Сначала создайте персонажей в разделе «Персонажи».
         </p>
@@ -287,7 +301,10 @@ function move(e: PointerEvent) {
           >
         </div>
       </section>
-      <section class="panel family-links">
+      <section
+        v-if="!draft.kind || draft.kind === 'family'"
+        class="panel family-links"
+      >
         <h3>Добавить связь</h3>
         <label
           >Первый участник<select v-model="from">
@@ -327,7 +344,13 @@ function move(e: PointerEvent) {
       </section>
       <section class="panel">
         <div class="character-page-heading">
-          <h3>Семейное дерево</h3>
+          <h3>
+            {{
+              !draft.kind || draft.kind === "family"
+                ? "Семейное дерево"
+                : "Состав группы"
+            }}
+          </h3>
           <div>
             <button
               @click="zoom = Math.max(0.4, zoom - 0.1)"
@@ -407,7 +430,10 @@ function move(e: PointerEvent) {
             </div>
           </div>
         </div>
-        <div class="family-compare">
+        <div
+          v-if="!draft.kind || draft.kind === 'family'"
+          class="family-compare"
+        >
           <label
             >Кто<select v-model="pickA" aria-label="Кто">
               <option value="">Выберите</option>
