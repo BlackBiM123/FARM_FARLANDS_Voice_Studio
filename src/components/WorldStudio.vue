@@ -717,7 +717,7 @@ onUnmounted(() => {
             <image
               v-if="reference"
               href="/simulation/region-reference.png"
-              width="1000"
+              width="1500"
               height="1000"
               preserveAspectRatio="none"
               opacity=".25"
