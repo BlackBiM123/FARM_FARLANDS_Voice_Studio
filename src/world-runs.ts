@@ -2,6 +2,7 @@ import type { WorldDefinition, WorldState } from "../shared/world";
 import { reportSchema } from "../shared/world";
 export type WorldReport = {
   version: 1;
+  rulesVersion?: 2;
   coreVersion: "farlands-core-1";
   contentHash: string;
   definition: WorldDefinition;

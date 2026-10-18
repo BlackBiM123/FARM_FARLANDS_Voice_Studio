@@ -415,3 +415,50 @@
   font-size: 11px;
   padding: 5px 8px;
 }
+.world-residents button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.world-residents img {
+  width: 24px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+.world-selected {
+  background: #dab77912;
+}
+.world-critical {
+  color: #ff9d8e;
+  font-weight: 700;
+}
+.world-goal-plan {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #dab77930;
+  border-radius: 8px;
+  background: #dab77908;
+  font-size: 12px;
+}
+.world-goal-plan progress {
+  display: block;
+  width: 100%;
+  height: 10px;
+  margin-top: 10px;
+  accent-color: #dab779;
+}
+.world-goal-plan small {
+  color: #b7ad99;
+  line-height: 1.6;
+}
+.world-alerts summary {
+  color: #edbf7a;
+  cursor: pointer;
+}
+.world-alerts p {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 8px 0;
+}

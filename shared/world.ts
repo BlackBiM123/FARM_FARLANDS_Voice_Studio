@@ -64,6 +64,7 @@ export const worldSchema = z
           role: z.enum(["stable", "farmer", "innkeeper", "resident"]),
           goalHouse: z.boolean(),
           helpfulness: z.number().min(0).max(100),
+          carryCapacity: z.number().min(0).max(1000).optional(),
         }),
       )
       .max(100),
@@ -135,6 +136,7 @@ export type WorldEvent = {
   data: Record<string, any>;
 };
 export type WorldAgent = {
+  cargo?: { item: string; amount: number; owner: string; source: string };
   id: string;
   place: string;
   energy: number;
@@ -230,6 +232,7 @@ const stateSchema = z.object({
 export const reportSchema = z
   .object({
     version: z.literal(1),
+    rulesVersion: z.literal(2).optional(),
     coreVersion: z.literal("farlands-core-1"),
     contentHash: z.string().min(1).max(128),
     definition: worldSchema,
@@ -256,6 +259,7 @@ export const reportSchema = z
           "eat",
           "buy",
           "pickup",
+          "import_pickup",
           "deliver",
           "return_cargo",
           "meet",

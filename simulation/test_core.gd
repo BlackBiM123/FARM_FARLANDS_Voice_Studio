@@ -50,6 +50,58 @@ func _initialize() -> void:
 	long_run.advance(2880)
 	conservation(long_run.snapshot())
 	var before=int(long_run.state.minute)
+	var shortage=world.duplicate(true)
+	for stock in shortage.stocks:
+		if stock.place=="tavern" and stock.item=="potato": stock.amount=0
+	var shipping=Core.new()
+	shipping.start(shortage,"shipping")
+	var in_flight=false
+	for minute in 1440:
+		shipping.advance(1)
+		for actor in shipping.state.agents.values():
+			if actor.get("cargo",{}).get("item","")=="potato":
+				in_flight=true
+				check(shipping.state.stocks["food_inn"]==0,"Еда не появляется до прибытия")
+				var resumed=Core.new()
+				check(resumed.restore(shipping.snapshot()),"Восстановление с грузом")
+				resumed.advance(90)
+				shipping.advance(90)
+				check(JSON.stringify(shipping.state,"",true)==JSON.stringify(resumed.state,"",true),"Перевозка продолжается без дублирования")
+				break
+		if in_flight: break
+	check(in_flight,"Дефицит создаёт настоящий груз у перевозчика")
+	shipping.advance(1440)
+	check(shipping.state.events.any(func(event): return event.type=="delivery" and event.text.contains("potato")),"Внешняя еда прибывает реальным маршрутом")
+	conservation(shipping.snapshot())
+	var damaged=shipping.snapshot()
+	damaged.state.agents.erase(world.agents[0].id)
+	var intact=JSON.stringify(shipping.state,"",true)
+	check(not shipping.restore(damaged),"Повреждённый снимок отклонён")
+	check(JSON.stringify(shipping.state,"",true)==intact,"Ошибка загрузки сохраняет прежний мир")
+	var counterfeit=shipping.snapshot()
+	counterfeit.state.accounts[world.agents[0].account]+=100
+	check(not shipping.restore(counterfeit),"Созданные из воздуха деньги отклоняются")
+	check(JSON.stringify(shipping.state,"",true)==intact,"Проверка баланса атомарна")
+	var overloaded=shortage.duplicate(true)
+	for npc in overloaded.agents: npc.carryCapacity=0.1
+	var light=Core.new()
+	light.start(overloaded,"light")
+	light.advance(1440)
+	check(not light.state.events.any(func(event): return event.type=="pickup"),"Груз тяжелее грузоподъёмности не погружается")
+	var isolated=shortage.duplicate(true)
+	for road in isolated.routes: road.open=false
+	var island=Core.new()
+	island.start(isolated,"island")
+	island.advance(2880)
+	check(int(island.state.stocks.food_inn)==0,"Закрытый маршрут не создаёт внешнюю поставку")
+	conservation(island.snapshot())
+	var budget=Core.new()
+	budget.start(world,"budget")
+	for event_index in 13999: budget._event("test","","","Проверка бюджета журнала")
+	var budget_before=int(budget.state.minute)
+	budget.advance(60)
+	check(budget.error!="" and int(budget.state.minute)==budget_before,"Лимит журнала явно останавливает расчёт без скрытой потери времени")
+	check(budget.state.events.size()==14000,"История не обрезается молча")
 	long_run.advance(1)
 	check(int(long_run.state.minute)==before and long_run.error!="","Ограничение длины запуска не меняет состояние")
 	for problem in failed:

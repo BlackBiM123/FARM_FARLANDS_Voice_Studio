@@ -73,6 +73,7 @@ const imported = ref<HTMLInputElement>(),
   worldFile = ref<HTMLInputElement>(),
   eventQuery = ref(""),
   eventType = ref(""),
+  eventActor = ref(""),
   selectedAgent = ref(""),
   tab = ref("accounts");
 const pan = ref({ x: 0, y: 0 }),
@@ -103,6 +104,9 @@ const visibleEvents = computed(() =>
     .filter(
       (e) =>
         (!eventType.value || e.type === eventType.value) &&
+        (!eventActor.value ||
+          e.actor === eventActor.value ||
+          e.witnesses.includes(eventActor.value)) &&
         (!eventQuery.value ||
           (e.text + " " + agentName(e.actor))
             .toLowerCase()
@@ -113,6 +117,36 @@ const visibleEvents = computed(() =>
 );
 const checks = computed(() => (report.value ? checkWorld(report.value) : [])),
   valid = computed(() => worldSchema.safeParse(draft.value));
+const alerts = computed(() => {
+  if (!report.value) return [];
+  const messages: string[] = [];
+  for (const a of agents.value) {
+    if (a.hunger < 150)
+      messages.push(
+        `${agentName(a.id)}: критический голод. Проверьте еду, личный счёт и дорогу к таверне.`,
+      );
+    if (a.energy < 100)
+      messages.push(`${agentName(a.id)}: истощение. Проверьте доступ к дому.`);
+    if (a.reason.startsWith("Нет открытого") || a.reason.startsWith("Место не"))
+      messages.push(`${agentName(a.id)}: ${a.reason}`);
+  }
+  const p = report.value.definition.production;
+  const source = report.value.definition.stocks.find(
+    (s) => s.place === p.place && s.owner === p.owner && s.item === p.input,
+  );
+  if (!source || (report.value.state.stocks[source.id] ?? 0) < p.inputAmount)
+    messages.push(
+      "Производство ждёт сырьё. Изменения начальных запасов применяются в новом запуске.",
+    );
+  return messages;
+});
+const cargoWeight = computed(() =>
+  inspect.value?.cargo
+    ? inspect.value.cargo.amount *
+      (activeWorld.value.items.find((i) => i.id === inspect.value.cargo?.item)
+        ?.weight ?? 0)
+    : 0,
+);
 const eventLabels: Record<string, string> = {
   decision: "Решение NPC",
   import: "Внешний рынок",
@@ -136,6 +170,7 @@ const actionLabels: Record<string, string> = {
   eat: "Еда",
   buy: "Покупка дома",
   pickup: "Погрузка",
+  import_pickup: "Погрузка на внешнем рынке",
   deliver: "Разгрузка",
   return_cargo: "Возврат груза",
   meet: "Ищет собеседника",
@@ -144,6 +179,30 @@ const actionLabels: Record<string, string> = {
 function agentName(id: string) {
   return activeWorld.value.agents.find((n) => n.id === id)?.name ?? id;
 }
+function personalBalance(id: string) {
+  const account = activeWorld.value.agents.find((a) => a.id === id)?.account;
+  return account ? (report.value?.state.accounts[account] ?? 0) : 0;
+}
+const housingPlan = computed(() => {
+  if (
+    !inspect.value ||
+    !report.value ||
+    !activeWorld.value.agents.find((a) => a.id === inspect.value?.id)?.goalHouse
+  )
+    return null;
+  const a = inspect.value,
+    price = activeWorld.value.house.price,
+    balance = personalBalance(a.id);
+  return {
+    balance,
+    price,
+    remaining: Math.max(0, price - balance),
+    progress: a.ownsHouse
+      ? 100
+      : Math.min(100, Math.round((100 * balance) / Math.max(1, price))),
+    bought: a.ownsHouse,
+  };
+});
 function placeName(id: string) {
   return activeWorld.value.places.find((n) => n.id === id)?.name ?? id;
 }
@@ -443,8 +502,16 @@ function receive(event: MessageEvent) {
   }
   clearTimeout(p.timer);
   pending.delete(event.data.requestId);
-  if (event.data.error) p.reject(Error(event.data.error));
-  else {
+  if (event.data.error) {
+    // Ядро может остановить длинный прогон после части шага. Показываем его
+    // фактический снимок, чтобы UI и последующее сохранение не отставали.
+    try {
+      void applyReport(parseReport(event.data.report));
+    } catch {
+      /* Ошибка загрузки снимка оставляет прежний запуск. */
+    }
+    p.reject(Error(event.data.error));
+  } else {
     try {
       p.resolve(parseReport(event.data.report));
     } catch {
@@ -520,7 +587,10 @@ async function restoreRun(value: WorldReport) {
     if ((await worldHash(value.definition)) !== value.contentHash)
       throw Error("Контрольная сумма определений не совпадает");
     await applyReport(await command("restore", { report: value }));
-    notice.value = "Запуск восстановлен. Авторские анкеты не менялись.";
+    notice.value =
+      value.rulesVersion === 2
+        ? "Запуск восстановлен. Авторские анкеты не менялись."
+        : "Старый снимок восстановлен. Продолжение использует правила 2: реальные поставки и проверку доступности действий. Для сравнения результатов создайте новый запуск.";
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -929,6 +999,7 @@ onUnmounted(() => {
                 <th>Работодатель</th>
                 <th>Зарплата</th>
                 <th>Аренда</th>
+                <th>Груз, кг · обычно 10</th>
                 <th>Цель: дом</th>
               </tr>
             </thead>
@@ -981,6 +1052,17 @@ onUnmounted(() => {
                 </td>
                 <td><input v-model.number="a.wage" type="number" min="0" /></td>
                 <td><input v-model.number="a.rent" type="number" min="0" /></td>
+                <td>
+                  <input
+                    v-model.number="a.carryCapacity"
+                    type="number"
+                    min="0"
+                    max="1000"
+                    step="0.1"
+                    placeholder="10"
+                    :aria-label="'Грузоподъёмность ' + a.name"
+                  />
+                </td>
                 <td><input v-model="a.goalHouse" type="checkbox" /></td>
               </tr>
             </tbody>
@@ -1344,6 +1426,14 @@ onUnmounted(() => {
             }}</span>
           </div>
         </div>
+        <details
+          v-if="alerts.length"
+          class="panel world-section world-alerts"
+          open
+        >
+          <summary>Требует внимания · {{ alerts.length }}</summary>
+          <p v-for="message in alerts" :key="message">{{ message }}</p>
+        </details>
         <div class="world-layout">
           <div class="panel world-map-panel">
             <svg
@@ -1447,7 +1537,57 @@ onUnmounted(() => {
               }}%</label
             >
             <p><strong>Цель:</strong> {{ inspect.goal }}</p>
+            <div v-if="housingPlan" class="world-goal-plan">
+              <strong>План: собственный дом</strong>
+              <progress
+                :value="housingPlan.progress"
+                max="100"
+                :aria-label="'Накопления на дом ' + agentName(inspect.id)"
+              />
+              <p>
+                {{
+                  housingPlan.bought
+                    ? "Дом приобретён. Цель выполнена."
+                    : housingPlan.remaining > 0
+                      ? `Заработать ещё ${housingPlan.remaining}. Сейчас ${housingPlan.balance} из ${housingPlan.price}.`
+                      : "Средства собраны. Следующий этап — прийти к продавцу и оформить покупку."
+                }}
+              </p>
+              <small
+                >Труд сегодня: {{ inspect.workMinutes }} / 240 мин для дневной
+                оплаты.
+                {{
+                  inspect.lastPaidDay === Math.floor(report.state.minute / 1440)
+                    ? "Оплата получена."
+                    : "Оплата ещё не получена."
+                }}</small
+              >
+            </div>
             <p><strong>Почему:</strong> {{ inspect.reason }}</p>
+            <p v-if="inspect.action.remaining">
+              <strong>До завершения:</strong>
+              {{ inspect.action.remaining }} мин.
+            </p>
+            <p v-if="inspect.action.type === 'travel'">
+              <strong>Назначение:</strong> {{ placeName(inspect.action.to) }} ·
+              {{
+                Math.round(
+                  (100 * inspect.action.elapsed) / inspect.action.total,
+                )
+              }}%
+            </p>
+            <p v-if="inspect.cargo">
+              <strong>Груз:</strong> {{ inspect.cargo.item }} ×
+              {{ inspect.cargo.amount }} ·
+              {{ cargoWeight.toFixed(2) }} кг<br /><small
+                >Владелец:
+                {{
+                  activeWorld.accounts.find(
+                    (a) => a.id === inspect.cargo?.owner,
+                  )?.name ?? inspect.cargo.owner
+                }}. Оплата при доставке.</small
+              >
+            </p>
             <p><strong>Дом:</strong> {{ placeName(inspect.home) }}</p>
             <p>
               <strong>Деньги:</strong>
@@ -1476,7 +1616,47 @@ onUnmounted(() => {
           </aside>
         </div>
         <details class="panel world-section">
-          <summary>Счета, запасы и собственность</summary>
+          <summary>
+            Жители · {{ agents.length }} · счета, запасы и собственность
+          </summary>
+          <div class="world-table-wrap">
+            <table class="world-table world-residents">
+              <thead>
+                <tr>
+                  <th>Персонаж</th>
+                  <th>Сейчас</th>
+                  <th>Место</th>
+                  <th>Деньги</th>
+                  <th>Сытость</th>
+                  <th>Энергия</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="a in agents"
+                  :key="a.id"
+                  :class="{ 'world-selected': selectedAgent === a.id }"
+                >
+                  <td>
+                    <button @click="selectedAgent = a.id">
+                      <img v-if="avatar(a.id)" :src="avatar(a.id)" alt="" />{{
+                        agentName(a.id)
+                      }}
+                    </button>
+                  </td>
+                  <td>{{ actionLabels[a.action.type] || "Выбирает дело" }}</td>
+                  <td>{{ placeName(a.place) }}</td>
+                  <td>{{ personalBalance(a.id) }}</td>
+                  <td :class="{ 'world-critical': a.hunger < 150 }">
+                    {{ Math.round(a.hunger / 10) }}%
+                  </td>
+                  <td :class="{ 'world-critical': a.energy < 100 }">
+                    {{ Math.round(a.energy / 10) }}%
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <div class="world-state-grid">
             <div>
               <h3>Счета</h3>
@@ -1506,6 +1686,12 @@ onUnmounted(() => {
         <section class="panel world-section">
           <div class="world-toolbar">
             <h3>Журнал событий</h3>
+            <select v-model="eventActor" aria-label="Участник событий">
+              <option value="">Все участники</option>
+              <option v-for="a in agents" :key="a.id" :value="a.id">
+                {{ agentName(a.id) }} · участник / свидетель
+              </option>
+            </select>
             <input
               v-model="eventQuery"
               placeholder="Поиск в журнале"

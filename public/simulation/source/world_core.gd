@@ -28,19 +28,61 @@ func restore(report: Dictionary) -> bool:
 		error = "Несовместимый отчёт или версия ядра"
 		return false
 	var candidate: Dictionary = report.get("state",{})
-	if int(candidate.get("minute",-1)) < 0 or not candidate.has("agents") or not candidate.has("accounts"):
+	if not report.get("definition") is Dictionary or int(candidate.get("minute",-1)) < 360 or int(candidate.get("minute",-1)) > 43560:
 		error = "Неполный снимок"
+		return false
+	for field in ["agents","accounts","stocks","owners","baselineItems","produced","consumed"]:
+		if not candidate.get(field) is Dictionary:
+			error = "Неполный снимок: "+field
+			return false
+	for field in ["events","ledger","protectedFacts"]:
+		if not candidate.get(field) is Array:
+			error = "Неполный снимок: "+field
+			return false
+	for npc in report.definition.agents:
+		if not candidate.agents.has(npc.id):
+			error = "В снимке нет NPC"
+			return false
+	# Ошибка загрузки не должна уничтожать уже работающий мир.
+	for value in candidate.accounts.values():
+		if not (value is int or value is float) or value < 0:
+			error = "Некорректный счёт в снимке"
+			return false
+	var initial_money:=0
+	var actual_money:=0
+	for account in report.definition.accounts:
+		initial_money+=int(account.balance)
+		if not candidate.accounts.has(account.id):
+			error="Нет счёта в снимке"
+			return false
+	for value in candidate.accounts.values(): actual_money+=int(value)
+	if actual_money!=initial_money or int(candidate.get("baselineMoney",-1))!=initial_money:
+		error="Нарушен баланс денег снимка"
+		return false
+	for item in report.definition.items:
+		var initial:=0
+		var actual:=0
+		for stock in report.definition.stocks:
+			if not candidate.stocks.has(stock.id) or int(candidate.stocks[stock.id])<0:
+				error="Некорректный запас снимка"
+				return false
+			if stock.item==item.id:
+				initial+=int(stock.amount)
+				actual+=int(candidate.stocks[stock.id])
+		for actor in candidate.agents.values():
+			if actor.get("cargo",{}).get("item","")==item.id: actual+=int(actor.cargo.amount)
+		if actual!=initial+int(candidate.produced.get(item.id,0))-int(candidate.consumed.get(item.id,0)) or int(candidate.baselineItems.get(item.id,0))!=initial:
+			error="Нарушен баланс товара снимка: "+str(item.id)
+			return false
+	if candidate.protectedFacts!=report.definition.protectedFacts:
+		error="Изменены защищённые факты снимка"
 		return false
 	definition = report.definition.duplicate(true)
 	state = candidate.duplicate(true)
-	for npc in definition.agents:
-		if not state.agents.has(npc.id):
-			error = "В снимке нет NPC"
-			return false
 	return true
 
 func snapshot() -> Dictionary:
-	return {"version":1,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
+	return {"version":1,"rulesVersion":2,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
 
 func advance(minutes: int) -> Dictionary:
 	error = ""
@@ -51,6 +93,11 @@ func advance(minutes: int) -> Dictionary:
 		error = "Один шаг до 14 дней; один запуск до 30 дней"
 		return snapshot()
 	for tick in minutes:
+		# Сохраняем полный журнал, а при достижении бюджета явно останавливаем запуск.
+		# Нельзя продолжать расчёт, который уже невозможно восстановить из облака.
+		if state.events.size()>=14000 or (tick%60==0 and JSON.stringify(snapshot()).to_utf8_buffer().size()>2800000):
+			error="Достигнут безопасный размер снимка. Запуск остановлен; сохраните отчёт. Для более длинного прогона уменьшите число участников."
+			break
 		state.minute += 1
 		var clock := int(state.minute) % 1440
 		if clock == 360:
@@ -65,13 +112,7 @@ func _dawn() -> void:
 		a.workMinutes = 0
 		if not a.ownsHouse and int(npc.rent) > 0:
 			_pay(npc.account,"inn_business",int(npc.rent),"rent:"+npc.id+":"+str(_day()),npc.id,"Аренда комнаты")
-	var outside_stock := _stock("pier","outside","potato")
-	var inn_stock := _stock("tavern","inn_business","potato")
-	if outside_stock!="" and inn_stock!="" and int(state.stocks[inn_stock])<20 and int(state.stocks[outside_stock])>=10:
-		if _pay("inn_business","outside",10*_price("potato"),"import:"+str(_day()),"","Поставка еды с внешнего рынка"):
-			state.stocks[outside_stock]-=10
-			state.stocks[inn_stock]+=10
-			_event("import","","tavern","Внешняя поставка: 10 картофеля. Запас и деньги списаны у реальных сторон.")
+	# Дефицит создаёт спрос на перевозку, но не телепортирует товар со склада.
 	_event("day","","","Начался день "+str(_day()+1))
 
 func _tick(npc: Dictionary, a: Dictionary) -> void:
@@ -111,14 +152,27 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	var evening := clock>=1020 and clock<1260
 	var social_score := 40 if evening else -1
 	var delivery_score := 55+int(npc.helpfulness)/8 if npc.role=="stable" and clock>=960 and clock<1200 and not state.ledger.has("delivery:"+str(_day())) and _stock_amount(definition.production.place,definition.production.owner,definition.production.output)>=2 else -1
+	var import_score := 110 if npc.role=="stable" and clock>=480 and clock<1200 and _stock_amount("tavern","inn_business","potato")<20 and _stock_amount("pier","outside","potato")>=10 and int(state.accounts.get("inn_business",0))>=10*_price("potato") and not _cargo_in_transit("potato") else -1
+	if not _reachable(a.place,npc.work): work_score=-1
+	if not _reachable(a.place,a.home): sleep_score=-1
+	if not _reachable(a.place,house.place): buy_score=-1
+	if not _reachable(a.place,"tavern"): social_score=-1
+	if not _reachable(a.place,definition.production.place) or not _reachable(definition.production.place,"tavern"): delivery_score=-1
+	if not _reachable(a.place,"pier") or not _reachable("pier","tavern"): import_score=-1
+	if 10*_weight("potato")>float(npc.get("carryCapacity",10)): import_score=-1
+	if 2*_weight(definition.production.output)>float(npc.get("carryCapacity",10)): delivery_score=-1
+	if not _reachable(a.place,"tavern") or _stock_amount("tavern","inn_business","potato")==0 or int(state.accounts[npc.account])<_price("potato"): eat_score=-1
 	a.choices = [{"action":"Отдых","score":sleep_score,"reason":"Ночь или критическая усталость"},{"action":"Поесть","score":eat_score,"reason":"Голод и реальный запас еды"},{"action":"Купить дом","score":buy_score,"reason":"Достаточно собственных средств и есть продавец"},{"action":"Работа","score":work_score,"reason":"Обязательство 08:00–16:00"},{"action":"Перевозка","score":delivery_score,"reason":"Есть груз фермы; оплачивает таверна"},{"action":"Общение","score":social_score,"reason":"Свободный вечер и согласие второго участника"},{"action":"Свободное время","score":0,"reason":"Нет более важных доступных дел"}]
 	var best: Dictionary = a.choices[0]
+	a.choices.append({"action":"Пополнить запас еды","score":import_score,"reason":"Таверне нужна еда; есть продавец, деньги и маршрут через причал"})
 	for choice in a.choices:
 		if int(choice.score)>int(best.score):
 			best=choice
 	a.reason = best.reason
 	var alternatives: Array=[]
-	for option in a.choices:
+	var ranked: Array=a.choices.duplicate()
+	ranked.sort_custom(func(left,right): return int(left.score)>int(right.score))
+	for option in ranked:
 		if option.action!=best.action and alternatives.size()<2:
 			alternatives.append({"action":option.action,"score":option.score})
 	_event("decision",npc.id,a.place,"Выбрано: "+best.action+" · "+best.reason,{"score":best.score,"alternatives":alternatives,"goal":a.goal})
@@ -133,6 +187,7 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 		"Купить дом": _at(npc,a,house.place,{"type":"buy","remaining":15})
 		"Работа": _at(npc,a,npc.work,{"type":"work","remaining":mini(60,960-clock)})
 		"Перевозка": _at(npc,a,definition.production.place,{"type":"pickup","remaining":5})
+		"Пополнить запас еды": _at(npc,a,"pier",{"type":"import_pickup","remaining":10})
 		"Общение": _at(npc,a,"tavern",{"type":"meet","remaining":1})
 		_: _at(npc,a,a.home,{"type":"idle","remaining":20+_random(21)})
 
@@ -157,6 +212,13 @@ func _at(npc: Dictionary, a: Dictionary, place: String, next: Dictionary) -> voi
 
 func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 	match action.type:
+		"import_pickup":
+			var source := _stock("pier","outside","potato")
+			if source!="" and int(state.stocks[source])>=10 and not _cargo_in_transit("potato") and 10*_weight("potato")<=float(npc.get("carryCapacity",10)):
+				state.stocks[source]-=10
+				a.cargo={"item":"potato","amount":10,"owner":"outside","source":source}
+				_event("pickup",npc.id,a.place,"Погружено 10 картофеля: товар остаётся собственностью продавца до оплаты")
+				_at(npc,a,"tavern",{"type":"deliver","remaining":10})
 		"travel":
 			a.place = action.to
 			a.action = action.after
@@ -183,7 +245,7 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 		"pickup":
 			var pr: Dictionary = definition.production
 			var stock := _stock(pr.place,pr.owner,pr.output)
-			if stock!="" and int(state.stocks[stock])>=2 and not state.ledger.has("delivery:"+str(_day())):
+			if stock!="" and int(state.stocks[stock])>=2 and not state.ledger.has("delivery:"+str(_day())) and 2*_weight(pr.output)<=float(npc.get("carryCapacity",10)):
 				state.stocks[stock]-=2
 				state.ledger.append("delivery:"+str(_day()))
 				a.cargo={"item":pr.output,"amount":2,"owner":pr.owner,"source":stock}
@@ -192,12 +254,12 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 			if a.has("cargo"):
 				var cargo: Dictionary = a.cargo
 				var target := _stock("tavern","inn_business",cargo.item)
-				if target!="" and _pay("inn_business",cargo.owner,int(cargo.amount)*_price(cargo.item),"shipment:"+str(_day()),npc.id,"Таверна оплатила груз фермы"):
+				if target!="" and _pay("inn_business",cargo.owner,int(cargo.amount)*_price(cargo.item),"shipment:"+npc.id+":"+str(state.minute),npc.id,"Таверна оплатила доставленный груз"):
 					state.stocks[target]+=int(cargo.amount)
-					_event("delivery",npc.id,a.place,"Доставлена мука: 2 шт. Владелец груза сменился после оплаты.")
+					_event("delivery",npc.id,a.place,"Доставлено: "+str(cargo.item)+" × "+str(cargo.amount)+". Товар оплачен получателем.")
 				else:
 					# Неоплаченный груз остаётся у перевозчика; возвращается по реальному пути.
-					_at(npc,a,definition.production.place,{"type":"return_cargo","remaining":5})
+					_at(npc,a,_stock_place(cargo.source),{"type":"return_cargo","remaining":5})
 					return
 				a.erase("cargo")
 		"return_cargo":
@@ -309,6 +371,16 @@ func _stock(place: String,owner: String,item: String) -> String:
 		if stock.place==place and stock.owner==owner and stock.item==item:
 			return stock.id
 	return ""
+func _stock_place(stock_id: String) -> String:
+	for stock in definition.stocks:
+		if stock.id==stock_id: return stock.place
+	return ""
+func _cargo_in_transit(item: String) -> bool:
+	for a in state.agents.values():
+		if a.get("cargo",{}).get("item","")==item: return true
+	return false
+func _reachable(from: String,to: String) -> bool:
+	return _exists(to) and (from==to or not _path(from,to).is_empty())
 func _stock_amount(place: String,owner: String,item: String) -> int:
 	return int(state.stocks.get(_stock(place,owner,item),0))
 func _price(item: String) -> int:
@@ -316,6 +388,10 @@ func _price(item: String) -> int:
 		if row.id==item:
 			return int(row.price)
 	return 0
+func _weight(item: String) -> float:
+	for row in definition.items:
+		if row.id==item: return float(row.weight)
+	return 0.0
 func _exists(place: String) -> bool:
 	for row in definition.places:
 		if row.id==place:
