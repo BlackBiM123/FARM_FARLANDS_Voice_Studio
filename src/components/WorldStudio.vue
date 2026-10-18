@@ -1423,7 +1423,7 @@ onUnmounted(() => {
           </div>
           <aside v-if="inspect" class="panel world-inspector">
             <label
-              >Наблюдать<select v-model="selectedAgent">
+              >Наблюдать<select v-model="selectedAgent" aria-label="Наблюдать">
                 <option v-for="a in agents" :key="a.id" :value="a.id">
                   {{ agentName(a.id) }}
                 </option>
