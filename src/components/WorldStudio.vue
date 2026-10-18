@@ -148,6 +148,7 @@ const cargoWeight = computed(() =>
     : 0,
 );
 const eventLabels: Record<string, string> = {
+  obligation: "Начисление",
   decision: "Решение NPC",
   import: "Внешний рынок",
   start: "Начало",
@@ -183,6 +184,15 @@ function personalBalance(id: string) {
   const account = activeWorld.value.agents.find((a) => a.id === id)?.account;
   return account ? (report.value?.state.accounts[account] ?? 0) : 0;
 }
+const outstanding = computed(() =>
+  (report.value?.state.obligations ?? []).filter((d) => d.remaining > 0),
+);
+const personalObligations = computed(() =>
+  outstanding.value.filter((d) => d.actor === inspect.value?.id),
+);
+function accountName(id: string) {
+  return activeWorld.value.accounts.find((a) => a.id === id)?.name ?? id;
+}
 const housingPlan = computed(() => {
   if (
     !inspect.value ||
@@ -192,9 +202,14 @@ const housingPlan = computed(() => {
     return null;
   const a = inspect.value,
     price = activeWorld.value.house.price,
-    balance = personalBalance(a.id);
+    account = activeWorld.value.agents.find((n) => n.id === a.id)?.account,
+    reserved = outstanding.value
+      .filter((d) => d.from === account)
+      .reduce((sum, d) => sum + d.remaining, 0),
+    balance = Math.max(0, personalBalance(a.id) - reserved);
   return {
     balance,
+    reserved,
     price,
     remaining: Math.max(0, price - balance),
     progress: a.ownsHouse
@@ -588,9 +603,9 @@ async function restoreRun(value: WorldReport) {
       throw Error("Контрольная сумма определений не совпадает");
     await applyReport(await command("restore", { report: value }));
     notice.value =
-      value.rulesVersion === 2
+      value.rulesVersion === 3
         ? "Запуск восстановлен. Авторские анкеты не менялись."
-        : "Старый снимок восстановлен. Продолжение использует правила 2: реальные поставки и проверку доступности действий. Для сравнения результатов создайте новый запуск.";
+        : "Старый снимок восстановлен. Продолжение использует правила 3: начисления и задолженности. Пропущенные долги прошлого не восстанавливаются задним числом. Для сравнения результатов создайте новый запуск.";
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -1539,6 +1554,10 @@ onUnmounted(() => {
             <p><strong>Цель:</strong> {{ inspect.goal }}</p>
             <div v-if="housingPlan" class="world-goal-plan">
               <strong>План: собственный дом</strong>
+              <p v-if="housingPlan.reserved">
+                Под обязательства зарезервировано: {{ housingPlan.reserved }}.
+                Прогресс считает свободные средства.
+              </p>
               <progress
                 :value="housingPlan.progress"
                 max="100"
@@ -1589,6 +1608,20 @@ onUnmounted(() => {
               >
             </p>
             <p><strong>Дом:</strong> {{ placeName(inspect.home) }}</p>
+            <p
+              v-for="debt in personalObligations"
+              :key="debt.id"
+              class="world-critical"
+            >
+              <strong
+                >{{
+                  debt.kind === "wage"
+                    ? "Ещё должны за работу"
+                    : "Задолженность по аренде"
+                }}:</strong
+              >
+              {{ debt.remaining }} · день {{ debt.day + 1 }}
+            </p>
             <p>
               <strong>Деньги:</strong>
               {{
@@ -1657,6 +1690,44 @@ onUnmounted(() => {
               </tbody>
             </table>
           </div>
+          <details class="world-obligations">
+            <summary>
+              Неоплаченные обязательства · {{ outstanding.length }}
+            </summary>
+            <p v-if="!outstanding.length" class="hint">
+              Все начисления оплачены.
+            </p>
+            <p class="hint">
+              Начисление фиксирует обязанность. Деньги переходят только при
+              оплате; доступная сумма погашает долг частично. Остаток
+              сохраняется и проверяется каждый час. Проценты и выселение не
+              моделируются.
+            </p>
+            <div class="world-table-wrap">
+              <table class="world-table">
+                <thead>
+                  <tr>
+                    <th>Начислено</th>
+                    <th>Основание</th>
+                    <th>Плательщик → получатель</th>
+                    <th>Сумма</th>
+                    <th>Осталось</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="debt in outstanding" :key="debt.id">
+                    <td>{{ formatWorldTime(debt.created) }}</td>
+                    <td>{{ debt.label }} · {{ agentName(debt.actor) }}</td>
+                    <td>
+                      {{ accountName(debt.from) }} → {{ accountName(debt.to) }}
+                    </td>
+                    <td>{{ debt.amount }}</td>
+                    <td class="world-critical">{{ debt.remaining }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
           <div class="world-state-grid">
             <div>
               <h3>Счета</h3>

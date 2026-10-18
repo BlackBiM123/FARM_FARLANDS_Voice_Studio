@@ -153,6 +153,18 @@ export type WorldAgent = {
   ownsHouse: boolean;
 };
 export type WorldState = {
+  obligations?: {
+    id: string;
+    from: string;
+    to: string;
+    amount: number;
+    remaining: number;
+    created: number;
+    day: number;
+    actor: string;
+    kind: "wage" | "rent";
+    label: string;
+  }[];
   version: 1;
   coreVersion: string;
   contentHash: string;
@@ -196,6 +208,23 @@ const agentState = z.object({
   cargo: z.object({ item: id, amount: num, owner: id, source: id }).optional(),
 });
 const stateSchema = z.object({
+  obligations: z
+    .array(
+      z.object({
+        id: z.string().max(200),
+        from: id,
+        to: id,
+        amount: num,
+        remaining: num,
+        created: num,
+        day: num,
+        actor: id,
+        kind: z.enum(["wage", "rent"]),
+        label: z.string().max(200),
+      }),
+    )
+    .max(10000)
+    .optional(),
   version: z.literal(1),
   coreVersion: z.literal("farlands-core-1"),
   contentHash: z.string().max(128),
@@ -232,7 +261,7 @@ const stateSchema = z.object({
 export const reportSchema = z
   .object({
     version: z.literal(1),
-    rulesVersion: z.literal(2).optional(),
+    rulesVersion: z.union([z.literal(2), z.literal(3)]).optional(),
     coreVersion: z.literal("farlands-core-1"),
     contentHash: z.string().min(1).max(128),
     definition: worldSchema,
@@ -242,6 +271,20 @@ export const reportSchema = z
     const fail = (message: string) => c.addIssue({ code: "custom", message });
     if (r.state.contentHash !== r.contentHash) fail("Разные версии снимка");
     const places = new Set(r.definition.places.map((p) => p.id));
+    const accounts = new Set(r.definition.accounts.map((a) => a.id));
+    const debts = r.state.obligations ?? [];
+    if (new Set(debts.map((d) => d.id)).size !== debts.length)
+      fail("Повтор обязательства");
+    for (const debt of debts) {
+      if (
+        !accounts.has(debt.from) ||
+        !accounts.has(debt.to) ||
+        !r.state.agents[debt.actor] ||
+        debt.remaining > debt.amount ||
+        debt.created > r.state.minute
+      )
+        fail("Некорректное обязательство");
+    }
     for (const n of r.definition.agents) {
       const a = r.state.agents[n.id];
       if (!a || !places.has(a.place) || !places.has(a.home))

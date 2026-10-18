@@ -17,6 +17,7 @@ func start(world: Dictionary, content_hash: String) -> Dictionary:
 		var item: String = stock.item
 		state.baselineItems[item] = int(state.baselineItems.get(item,0)) + int(stock.amount)
 	state.owners[world.house.place] = world.house.seller
+	state.obligations=[]
 	for npc in world.agents:
 		state.agents[npc.id] = {"id":npc.id,"place":npc.home,"energy":900,"hunger":900,"action":{},"reason":"Начало дня","choices":[],"goal":"Собственный дом" if npc.goalHouse else "Работа и спокойная жизнь","knowledge":[],"relationships":{},"workMinutes":0,"lastPaidDay":-1,"home":npc.home,"ownsHouse":false}
 	_event("start","","","Начало отдельного тестового мира. Авторские анкеты не изменяются.")
@@ -77,12 +78,25 @@ func restore(report: Dictionary) -> bool:
 	if candidate.protectedFacts!=report.definition.protectedFacts:
 		error="Изменены защищённые факты снимка"
 		return false
+	if not candidate.get("obligations",[]) is Array:
+		error="Некорректные обязательства снимка"
+		return false
+	var debt_ids: Dictionary={}
+	for debt in candidate.get("obligations",[]):
+		if not debt is Dictionary or not debt.has_all(["id","from","to","amount","remaining","created","day","actor","kind","label"]):
+			error="Неполное обязательство снимка"
+			return false
+		if debt_ids.has(debt.id) or not candidate.accounts.has(debt.from) or not candidate.accounts.has(debt.to) or not candidate.agents.has(debt.actor) or int(debt.remaining)<0 or int(debt.remaining)>int(debt.amount) or int(debt.created)>int(candidate.minute):
+			error="Некорректное обязательство снимка"
+			return false
+		debt_ids[debt.id]=true
 	definition = report.definition.duplicate(true)
 	state = candidate.duplicate(true)
+	if not state.has("obligations"): state.obligations=[]
 	return true
 
 func snapshot() -> Dictionary:
-	return {"version":1,"rulesVersion":2,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
+	return {"version":1,"rulesVersion":3,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
 
 func advance(minutes: int) -> Dictionary:
 	error = ""
@@ -102,6 +116,7 @@ func advance(minutes: int) -> Dictionary:
 		var clock := int(state.minute) % 1440
 		if clock == 360:
 			_dawn()
+		if clock%60==0: _settle_obligations()
 		for npc in definition.agents:
 			_tick(npc, state.agents[npc.id])
 	return snapshot()
@@ -111,7 +126,7 @@ func _dawn() -> void:
 		var a: Dictionary = state.agents[npc.id]
 		a.workMinutes = 0
 		if not a.ownsHouse and int(npc.rent) > 0:
-			_pay(npc.account,"inn_business",int(npc.rent),"rent:"+npc.id+":"+str(_day()),npc.id,"Аренда комнаты")
+			_oblige(npc.account,"inn_business",int(npc.rent),"rent:"+npc.id+":"+str(_day()),npc.id,"rent","Аренда комнаты")
 	# Дефицит создаёт спрос на перевозку, но не телепортирует товар со склада.
 	_event("day","","","Начался день "+str(_day()+1))
 
@@ -148,7 +163,7 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	var sleep_score := 100 if clock < 360 or clock >= 1320 else (130 if int(a.energy)<150 else -1)
 	var eat_score := 120 if int(a.hunger)<300 else -1
 	var house: Dictionary = definition.house
-	var buy_score := 95 if npc.goalHouse and not a.ownsHouse and int(state.accounts[npc.account])>=int(house.price) and state.owners.get(house.place,"")==house.seller else -1
+	var buy_score := 95 if npc.goalHouse and not a.ownsHouse and _available(npc.account)>=int(house.price) and state.owners.get(house.place,"")==house.seller else -1
 	var evening := clock>=1020 and clock<1260
 	var social_score := 40 if evening else -1
 	var delivery_score := 55+int(npc.helpfulness)/8 if npc.role=="stable" and clock>=960 and clock<1200 and not state.ledger.has("delivery:"+str(_day())) and _stock_amount(definition.production.place,definition.production.owner,definition.production.output)>=2 else -1
@@ -225,8 +240,7 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 			_event("arrive",npc.id,a.place,"Прибытие: "+_place_name(a.place))
 		"work":
 			if int(a.workMinutes)>=240 and int(a.lastPaidDay)!=_day():
-				if _pay(npc.employer,npc.account,int(npc.wage),"wage:"+npc.id+":"+str(_day()),npc.id,"Оплата работы"):
-					a.lastPaidDay=_day()
+				_oblige(npc.employer,npc.account,int(npc.wage),"wage:"+npc.id+":"+str(_day()),npc.id,"wage","Оплата работы")
 		"eat":
 			var stock := _stock("tavern","inn_business","potato")
 			if stock!="" and int(state.stocks[stock])>0 and _pay(npc.account,"inn_business",_price("potato"),"meal:"+npc.id+":"+str(state.minute),npc.id,"Покупка еды"):
@@ -236,7 +250,7 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 				_event("eat",npc.id,a.place,"Поел: расход 1 картофеля")
 		"buy":
 			var h: Dictionary = definition.house
-			if state.owners.get(h.place,"")==h.seller and _pay(npc.account,h.seller,int(h.price),"house:"+h.place,npc.id,"Покупка собственного дома"):
+			if state.owners.get(h.place,"")==h.seller and _available(npc.account)>=int(h.price) and _pay(npc.account,h.seller,int(h.price),"house:"+h.place,npc.id,"Покупка собственного дома"):
 				state.owners[h.place]=npc.account
 				a.ownsHouse=true
 				a.home=h.place
@@ -314,6 +328,36 @@ func _produce(npc: Dictionary) -> void:
 	state.consumed[p.input]=int(state.consumed.get(p.input,0))+int(p.inputAmount)
 	state.produced[p.output]=int(state.produced.get(p.output,0))+int(p.outputAmount)
 	_event("production",npc.id,p.place,"Переработка "+str(p.input)+" → "+str(p.output)+": расход сырья и "+str(p.minutes)+" минут труда")
+
+func _available(account: String) -> int:
+	var reserved:=0
+	for debt in state.obligations:
+		if debt.from==account: reserved+=int(debt.remaining)
+	return maxi(0,int(state.accounts.get(account,0))-reserved)
+
+func _oblige(from: String,to: String,amount: int,key: String,actor: String,kind: String,label: String) -> void:
+	if state.ledger.has(key): return
+	if amount==0:
+		state.ledger.append(key)
+		if kind=="wage": state.agents[actor].lastPaidDay=_day()
+		return
+	for debt in state.obligations:
+		if debt.id==key: return
+	var debt={"id":key,"from":from,"to":to,"amount":amount,"remaining":amount,"created":int(state.minute),"day":_day(),"actor":actor,"kind":kind,"label":label}
+	state.obligations.append(debt)
+	_event("obligation",actor,state.agents.get(actor,{}).get("place",""),label+": начислено "+str(amount),{"obligation":key,"from":from,"to":to,"amount":amount})
+	_settle_obligations()
+
+func _settle_obligations() -> void:
+	for debt in state.obligations:
+		if int(debt.remaining)<=0: continue
+		var amount:=mini(int(debt.remaining),int(state.accounts.get(debt.from,0)))
+		if amount>0 and _pay(debt.from,debt.to,amount,"settle:"+debt.id+":"+str(debt.remaining),debt.actor,debt.label):
+			debt.remaining-=amount
+		if int(debt.remaining)==0:
+			state.ledger.append(debt.id)
+			if debt.kind=="wage" and state.agents.has(debt.actor):
+				state.agents[debt.actor].lastPaidDay=maxi(int(state.agents[debt.actor].lastPaidDay),int(debt.day))
 
 func _pay(from: String,to: String,amount: int,key: String,actor: String,text: String) -> bool:
 	if state.ledger.has(key) or not state.accounts.has(from) or not state.accounts.has(to) or int(state.accounts[from])<amount or amount<0:
