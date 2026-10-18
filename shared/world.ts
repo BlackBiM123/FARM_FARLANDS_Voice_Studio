@@ -36,7 +36,7 @@ export const worldSchema = z
         }),
       )
       .max(200),
-    accounts: z.array(z.object({ id, name, balance: num })).max(100),
+    accounts: z.array(z.object({ id, name, balance: num })).max(200),
     items: z
       .array(
         z.object({
@@ -262,7 +262,7 @@ export const reportSchema = z
   .object({
     version: z.literal(1),
     rulesVersion: z
-      .union([z.literal(2), z.literal(3), z.literal(4)])
+      .union([z.literal(2), z.literal(3), z.literal(4), z.literal(5)])
       .optional(),
     coreVersion: z.literal("farlands-core-1"),
     contentHash: z.string().min(1).max(128),

@@ -123,6 +123,32 @@ test("world editors and the real Godot Web core preserve lore and match headless
     timeout: 30000,
   });
   await page.getByRole("button", { name: "7 дней", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Остановить прогон", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Прогон остановлен. Последнее рассчитанное состояние сохранено локально.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  const cancelledDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Отчёт JSON", exact: true }).click();
+  const cancelledStream = await (await cancelledDownload).createReadStream(),
+    cancelledChunks: Buffer[] = [];
+  for await (const chunk of cancelledStream!) cancelledChunks.push(chunk);
+  const checkpoint = JSON.parse(
+    Buffer.concat(cancelledChunks).toString(),
+  ) as WorldReport;
+  expect(checkpoint.state.minute).toBeGreaterThan(360);
+  expect(checkpoint.state.minute).toBeLessThan(10440);
+  expect(checkWorld(checkpoint)).toEqual([]);
+  await page.getByRole("button", { name: "Новый запуск", exact: true }).click();
+  await page.getByRole("button", { name: "7 дней", exact: true }).click();
+  await expect(page.locator(".world-run-controls strong").first()).toHaveText(
+    "День 8 · 06:00",
+    { timeout: 120000 },
+  );
   await expect(page.locator(".world-run-controls strong").first()).toBeVisible({
     timeout: 30000,
   });

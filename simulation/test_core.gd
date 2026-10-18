@@ -5,6 +5,16 @@ func _initialize() -> void:
 	var args=OS.get_cmdline_user_args()
 	var world: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(args[0]))
 	var baseline=world.duplicate(true)
+	var routes=Core.new()
+	routes.start(world,"routes")
+	var path=routes._path("tavern","pier")
+	check(JSON.stringify(path)==JSON.stringify(routes._path_uncached("tavern","pier")),"Кеш не меняет кратчайший маршрут")
+	if not path.is_empty(): path[0].minutes=999
+	check(routes._path("tavern","pier")[0].minutes!=999,"Путешествия не разделяют изменяемые участки пути")
+	var closed_routes=world.duplicate(true)
+	for edge in closed_routes.routes: edge.open=false
+	routes.start(closed_routes,"closed-routes")
+	check(routes._path("tavern","pier").is_empty(),"Новый запуск сбрасывает старые маршруты")
 	var a=Core.new()
 	a.start(world,"test-hash")
 	a.advance(10080)

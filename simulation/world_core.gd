@@ -4,10 +4,12 @@ const VERSION := "farlands-core-1"
 var definition: Dictionary = {}
 var state: Dictionary = {}
 var error := ""
+var path_cache: Dictionary={}
 
 func start(world: Dictionary, content_hash: String) -> Dictionary:
 	error = ""
 	definition = world.duplicate(true)
+	path_cache.clear()
 	state = {"version":1,"coreVersion":VERSION,"contentHash":content_hash,"minute":360,"seed":int(world.seed),"rng":maxi(1,int(world.seed)),"agents":{},"accounts":{},"stocks":{},"owners":{},"events":[],"nextEvent":1,"productionMinutes":0,"ledger":[],"protectedFacts":world.protectedFacts.duplicate(),"baselineMoney":0,"baselineItems":{},"produced":{},"consumed":{}}
 	for account in world.accounts:
 		state.accounts[account.id] = int(account.balance)
@@ -91,12 +93,13 @@ func restore(report: Dictionary) -> bool:
 			return false
 		debt_ids[debt.id]=true
 	definition = report.definition.duplicate(true)
+	path_cache.clear()
 	state = candidate.duplicate(true)
 	if not state.has("obligations"): state.obligations=[]
 	return true
 
 func snapshot() -> Dictionary:
-	return {"version":1,"rulesVersion":4,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
+	return {"version":1,"rulesVersion":5,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
 
 func advance(minutes: int) -> Dictionary:
 	error = ""
@@ -109,7 +112,9 @@ func advance(minutes: int) -> Dictionary:
 	for tick in minutes:
 		# Сохраняем полный журнал, а при достижении бюджета явно останавливаем запуск.
 		# Нельзя продолжать расчёт, который уже невозможно восстановить из облака.
-		if state.events.size()>=14000 or (tick%60==0 and JSON.stringify(snapshot()).to_utf8_buffer().size()>2800000):
+		var check_interval:=10 if definition.agents.size()>20 else 60
+		var byte_budget:=2100000 if definition.agents.size()>20 else 2800000
+		if state.events.size()>=14000 or (int(state.minute)%check_interval==0 and JSON.stringify(snapshot()).to_utf8_buffer().size()>byte_budget):
 			error="Достигнут безопасный размер снимка. Запуск остановлен; сохраните отчёт. Для более длинного прогона уменьшите число участников."
 			break
 		state.minute += 1
@@ -390,6 +395,12 @@ func _event(type: String,actor: String,place: String,text: String,data: Dictiona
 		state.agents[key].knowledge.append(event_id)
 
 func _path(from: String,to: String) -> Array:
+	var key:=from+":"+to
+	if not path_cache.has(key): path_cache[key]=_path_uncached(from,to)
+	# Возвращаем отдельный маршрут: изменение одного путешествия не портит другие.
+	return path_cache[key].duplicate(true)
+
+func _path_uncached(from: String,to: String) -> Array:
 	var dist: Dictionary={from:0}
 	var prev: Dictionary={}
 	var open: Array=[from]

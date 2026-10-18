@@ -82,6 +82,8 @@ const runs = ref<{ id: string; createdAt: string }[]>([]),
   cloudBusy = ref(false),
   zoom = ref(1),
   localAvailable = ref<WorldReport | null>(null);
+const advanceCancelled = ref(false),
+  advanceProgress = ref<{ done: number; total: number } | null>(null);
 const choice = computed(() =>
     draft.value.places.find((p) => p.id === selected.value),
   ),
@@ -601,17 +603,32 @@ async function newRun() {
 async function step(minutes: number) {
   if (busy.value) return;
   busy.value = true;
+  advanceCancelled.value = false;
+  advanceProgress.value = { done: 0, total: minutes };
   try {
-    await applyReport(await command("advance", { minutes }));
+    for (let done = 0; done < minutes && !advanceCancelled.value;) {
+      const chunk = Math.min(240, minutes - done);
+      await applyReport(await command("advance", { minutes: chunk }));
+      done += chunk;
+      advanceProgress.value = { done, total: minutes };
+      // Даём браузеру обновить прогресс и принять остановку между порциями расчёта.
+      if (done < minutes)
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    if (advanceCancelled.value)
+      notice.value =
+        "Прогон остановлен. Последнее рассчитанное состояние сохранено локально.";
   } catch (e) {
     pause();
     error.value = String(e);
   } finally {
+    advanceProgress.value = null;
     busy.value = false;
   }
 }
 function pause() {
   playing.value = false;
+  advanceCancelled.value = true;
   clearTimeout(timer);
 }
 async function loop() {
@@ -634,9 +651,9 @@ async function restoreRun(value: WorldReport) {
       throw Error("Контрольная сумма определений не совпадает");
     await applyReport(await command("restore", { report: value }));
     notice.value =
-      value.rulesVersion === 4
+      value.rulesVersion === 5
         ? "Запуск восстановлен. Авторские анкеты не менялись."
-        : "Старый снимок восстановлен. Продолжение использует правила 4: закрепление перевозок и пересмотр планов. Старые долги задним числом не создаются. Для сравнения результатов создайте новый запуск.";
+        : "Старый снимок восстановлен. Продолжение использует правила 5: согласованные планы и остановку по игровому времени. Старые долги задним числом не создаются. Для сравнения результатов создайте новый запуск.";
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -1396,6 +1413,17 @@ onUnmounted(() => {
             @click="step(10080)"
           >
             7 дней</button
+          ><button
+            v-if="advanceProgress && advanceProgress.total > 240"
+            :disabled="advanceCancelled"
+            @click="advanceCancelled = true"
+          >
+            Остановить прогон</button
+          ><span
+            v-if="advanceProgress && advanceProgress.total > 240"
+            role="status"
+            >Рассчитано {{ advanceProgress.done }} /
+            {{ advanceProgress.total }} мин.</span
           ><select v-model.number="speed" aria-label="Скорость симуляции">
             <option :value="15">15 мин / шаг</option>
             <option :value="60">1 час / шаг</option>
@@ -1404,7 +1432,9 @@ onUnmounted(() => {
         </div>
         <p class="hint">
           Определения фиксируются при создании запуска. Изменения редактора
-          действуют только в новом прогоне. Максимум 30 дней на запуск.
+          действуют только в новом прогоне. Максимум 30 дней на запуск. Большие
+          группы могут остановиться раньше по размеру снимка; история не
+          обрезается.
         </p>
         <div class="world-toolbar">
           <button :disabled="!report || cloudBusy" @click="cloudSave">

@@ -11,6 +11,7 @@
     "test:e2e": "playwright test",
     "build:simulation": "node tools/build-simulation.mjs",
     "test:world": "playwright test tests/world.spec.ts",
+    "test:stress": "node tools/test-stress.mjs",
     "test:simulation": "node tools/test-simulation.mjs && node tools/test-clock-integration.mjs"
   },
   "dependencies": {
