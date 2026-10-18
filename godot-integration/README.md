@@ -1,0 +1,13 @@
+# Ядро мира FARM & FARLANDS
+
+1. Распакуйте addons/farlands_world/ и world/ в игровой проект Godot 4.7.1.
+2. Добавьте autoload WorldSimulation: res://addons/farlands_world/world_service.gd после GameClock.
+3. Откройте res://addons/farlands_world/world_lab.tscn для условного отладочного стенда.
+4. Общее сохранение SaveGame включает WorldSimulation как участника saveable. Его снимок содержит всех NPC, независимо от наличия физического узла.
+5. Для обычного тестового прогона без игровых сцен используйте отдельный проект simulation/ из репозитория Studio: Godot --headless --path simulation --script run.gd -- world.json report.json 10080.
+
+Ядро в Web и игре — один world_core.gd. Временные шаги идут от GameClock; сон обрабатывается через day_changed с расчётом пропущенных минут. Второго игрового таймера нет. Загрузка общего слота должна восстановить и game_clock, и world_simulation.
+
+Стартовые деньги, производство и предложение жилья — тестовый баланс. Локации города условны. world_actor.gd — отладочная проекция логического пути; физическую навигацию по production-картам ещё нужно привязать к реальным anchors и NavigationAgent. Не включайте WanderComponent и эту проекцию как двух владельцев положения одного NPC.
+
+При изменении исходного world_core.gd в Studio выполните npm run build:simulation и повторно экспортируйте пакет. build.json содержит контрольные суммы. Не редактируйте независимую копию ядра в игре.

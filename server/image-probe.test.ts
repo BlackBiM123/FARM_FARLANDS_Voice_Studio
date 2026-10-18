@@ -5,11 +5,14 @@ import { currentUser } from "./auth.js";
 import { cloudClient } from "./supabase.js";
 import { handleImageProbe } from "./image-probe.js";
 afterEach(() => {
+  vi.useRealTimers();
   vi.resetAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
 it("does not repeat a paid request if a probe is already reserved", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-16T12:00:00Z"));
   vi.mocked(currentUser).mockResolvedValue({
     app_metadata: { studio_role: "admin" },
   } as never);

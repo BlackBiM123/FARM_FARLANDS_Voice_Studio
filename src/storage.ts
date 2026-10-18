@@ -80,6 +80,17 @@ export function loadFamilies() {
     return [];
   }
 }
+export function loadWorld() {
+  try {
+    return projectSchema.parse(
+      JSON.parse(
+        localStorage.getItem("farlands-empty-studio-project") || "null",
+      ),
+    ).world;
+  } catch {
+    return undefined;
+  }
+}
 export function saveProject(
   npcs: NPC[],
   gameCharacter = true,
@@ -93,10 +104,18 @@ export function saveProject(
     scenarios: [],
     scenarioGuidelines: "",
   },
+  world?: import("../shared/world").WorldDefinition,
 ) {
   localStorage.setItem(
     "farlands-empty-studio-project",
-    JSON.stringify({ version: 1, npcs, gameCharacter, families, ...content }),
+    JSON.stringify({
+      version: 1,
+      npcs,
+      gameCharacter,
+      families,
+      world,
+      ...content,
+    }),
   );
 }
 export function loadContent() {

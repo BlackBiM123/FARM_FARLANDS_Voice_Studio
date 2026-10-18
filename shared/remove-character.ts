@@ -5,6 +5,8 @@ export function removeCharacter(project: Project, id: string): Project {
   const next = structuredClone(project);
   const deleted = next.npcs.find((n) => n.id === id);
   next.npcs = next.npcs.filter((n) => n.id !== id);
+  if (next.world)
+    next.world.agents = next.world.agents.filter((a) => a.id !== id);
   for (const n of next.npcs)
     for (const r of n.profile.relationships)
       if (r.otherId === id) {

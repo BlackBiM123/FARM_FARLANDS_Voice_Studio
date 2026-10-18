@@ -1,0 +1,9 @@
+{
+  "coreVersion": "farlands-core-1",
+  "godot": "4.7.1",
+  "sources": {
+    "world_core.gd": "aec4efbfb832835ce71e4cc5eee1d24ee34d4cd7b509fe00751e9acfd64dbb39",
+    "web.gd": "432f5efd625a0be420e36477227aa8b083942ebb9a7ed868c97ab6b3e2c0f078"
+  },
+  "pck": "d5d39f9f384a1edf3fffbe87558b3d5a5b28a7560e7afc6105341ce2693bf484"
+}

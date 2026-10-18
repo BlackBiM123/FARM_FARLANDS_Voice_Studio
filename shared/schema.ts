@@ -1,3 +1,4 @@
+import { worldSchema } from "./world.js";
 import { z } from "zod";
 import { characterProfileSchema, emptyProfile } from "./character.js";
 import { familySchema, familyError } from "./family.js";
@@ -60,6 +61,7 @@ export const npcSchema = z.object({
 export const projectSchema = z
   .object({
     version: z.literal(1),
+    world: worldSchema.optional(),
     npcs: z.array(npcSchema).max(100),
     gameCharacter: z.boolean().default(true),
     dialogueGroups: z.array(dialogueGroupSchema).max(100).default([]),
@@ -75,6 +77,12 @@ export const projectSchema = z
     for (const message of contentErrors(p))
       ctx.addIssue({ code: "custom", message });
     const ids = new Set(p.npcs.map((n) => n.id));
+    if (p.world?.agents.some((a) => !ids.has(a.id)))
+      ctx.addIssue({
+        code: "custom",
+        message: "Участник мира отсутствует в каталоге NPC",
+        path: ["world"],
+      });
     const seen = new Set<string>();
     for (const f of p.families) {
       const error =

@@ -1,3 +1,4 @@
+import { createWorld } from "../src/world-defaults.js";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { handleCloud } from "./cloud.js";
@@ -63,7 +64,17 @@ it("rejects stale revisions instead of overwriting a newer cloud project", async
   };
   const update = vi.fn().mockReturnValue(q);
   vi.mocked(createClient).mockReturnValue({
-    from: () => ({ update }),
+    from: () => ({
+      update,
+      select: () => ({
+        eq: () => ({
+          single: async () => ({
+            data: { payload: { version: 1, npcs: [], families: [] } },
+            error: null,
+          }),
+        }),
+      }),
+    }),
   } as unknown as ReturnType<typeof createClient>);
   const r = await handleCloud(
     request("/api/cloud", "PUT", {
@@ -200,6 +211,7 @@ it("preserves character profiles when an older voice-only client submits a proje
       data: {
         payload: {
           version: 1,
+          world: createWorld([]),
           ...oldContent,
           npcs: [
             {
@@ -247,6 +259,7 @@ it("preserves character profiles when an older voice-only client submits a proje
   );
   expect(r.status).toBe(200);
   const payload = update.mock.calls[0]![0].payload;
+  expect(payload.world).toEqual(createWorld([]));
   expect(payload.npcs[0].name).toBe("Updated voice name");
   expect(payload.npcs[0].profile.biography).toBe("Keep this biography");
   expect(payload.npcs[0].profile.age).toBe(42);

@@ -98,6 +98,7 @@ export async function handleCloud(request: Request) {
         "scenarios",
       ].some((key) => rawProject[key] === undefined);
       if (
+        rawProject.world === undefined ||
         missingContent ||
         parsed.data.project.families.some(
           (f) =>
@@ -124,6 +125,14 @@ export async function handleCloud(request: Request) {
           .single();
         if (previous.error) throw Error("read");
         const old = projectSchema.parse(previous.data.payload);
+        if (rawProject.world === undefined && old.world) {
+          parsed.data.project.world = {
+            ...old.world,
+            agents: old.world.agents.filter((a) =>
+              parsed.data.project.npcs.some((n) => n.id === a.id),
+            ),
+          };
+        }
         for (const family of parsed.data.project.families) {
           if (family.kind === undefined)
             family.kind = old.families.find((f) => f.id === family.id)?.kind;

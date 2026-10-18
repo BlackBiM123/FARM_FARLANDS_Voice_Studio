@@ -65,6 +65,13 @@ const dialogueGroups = ref<DialogueGroup[]>(content.dialogueGroups),
   dialogueLines = ref<DialogueLine[]>(content.dialogueLines),
   scenarios = ref<Scenario[]>(content.scenarios),
   scenarioGuidelines = ref(content.scenarioGuidelines);
+import { loadWorld } from "./storage";
+const world = ref(loadWorld());
+const WorldStudio = defineAsyncComponent({
+  loader: () => import("./components/WorldStudio.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+});
 import { loadFamilies } from "./storage";
 const families = ref(loadFamilies());
 import ImageHoverPreview from "./components/ImageHoverPreview.vue";
@@ -82,21 +89,23 @@ const initialDialogueNpc = computed(
     undefined,
 );
 const characterMode = computed(() =>
-  characterHash.value === "#/settings"
-    ? "settings"
-    : characterHash.value.startsWith("#/dialogue")
-      ? "dialogue"
-      : characterHash.value.startsWith("#/stories")
-        ? "stories"
-        : characterHash.value.startsWith("#/families")
-          ? "families"
-          : characterHash.value === "#/characters/new"
-            ? "new"
-            : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
-              ? "edit"
-              : characterHash.value === "#/characters"
-                ? "catalog"
-                : "studio",
+  /^#\/(world|economy|simulation)(\/|$)/.test(characterHash.value)
+    ? "world"
+    : characterHash.value === "#/settings"
+      ? "settings"
+      : characterHash.value.startsWith("#/dialogue")
+        ? "dialogue"
+        : characterHash.value.startsWith("#/stories")
+          ? "stories"
+          : characterHash.value.startsWith("#/families")
+            ? "families"
+            : characterHash.value === "#/characters/new"
+              ? "new"
+              : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
+                ? "edit"
+                : characterHash.value === "#/characters"
+                  ? "catalog"
+                  : "studio",
 );
 const editingCharacter = computed(() =>
   npcs.value.find(
@@ -207,6 +216,7 @@ try {
 function snapshotProject() {
   return projectSchema.parse({
     version: 1,
+    world: world.value,
     npcs: npcs.value,
     gameCharacter: gameCharacter.value,
     families: families.value,
@@ -318,6 +328,7 @@ async function syncCloud(forceLoad = false) {
             JSON.stringify(local),
           );
         } catch {}
+      world.value = data.project.world;
       npcs.value = data.project.npcs;
       gameCharacter.value = data.project.gameCharacter;
       families.value = data.project.families;
@@ -599,11 +610,13 @@ watch(
     dialogueLines,
     scenarios,
     scenarioGuidelines,
+    world,
   ],
   () => {
     if (
       !projectSchema.safeParse({
         version: 1,
+        world: world.value,
         npcs: npcs.value,
         gameCharacter: gameCharacter.value,
         families: families.value,
@@ -618,12 +631,18 @@ watch(
       return;
     }
     try {
-      saveProject(npcs.value, gameCharacter.value, families.value, {
-        dialogueGroups: dialogueGroups.value,
-        dialogueLines: dialogueLines.value,
-        scenarios: scenarios.value,
-        scenarioGuidelines: scenarioGuidelines.value,
-      });
+      saveProject(
+        npcs.value,
+        gameCharacter.value,
+        families.value,
+        {
+          dialogueGroups: dialogueGroups.value,
+          dialogueLines: dialogueLines.value,
+          scenarios: scenarios.value,
+          scenarioGuidelines: scenarioGuidelines.value,
+        },
+        world.value,
+      );
     } catch {
       notice.value = "Не удалось сохранить кеш браузера. Экспортируйте JSON.";
     }
@@ -678,6 +697,7 @@ function exportProject() {
         JSON.stringify(
           {
             version: 1,
+            world: world.value,
             npcs: npcs.value,
             gameCharacter: gameCharacter.value,
             families: families.value,
@@ -704,6 +724,7 @@ async function importProject(e: Event) {
   try {
     if (file.size > 3500000) throw Error();
     const data = projectSchema.parse(JSON.parse(await file.text()));
+    world.value = data.world;
     npcs.value = data.npcs;
     gameCharacter.value = data.gameCharacter;
     families.value = data.families;
@@ -773,6 +794,7 @@ function confirmDelete() {
   const next = removeCharacter(snapshotProject(), target.id);
   npcs.value = next.npcs;
   families.value = next.families;
+  world.value = next.world;
   dialogueLines.value = next.dialogueLines;
   scenarios.value = next.scenarios;
   if (selected.value === target.id) selected.value = npcs.value[0]?.id || "";
@@ -1027,10 +1049,12 @@ async function exportGodot() {
     const zip = new JSZip();
     const manifest = {
       version: 1,
+      world: world.value,
       project: "FARM & FARLANDS",
       audio_format: "wav",
       event_model: {
         version: 1,
+        world: world.value,
         time_unit: "game_hours",
         occurrence_states: [
           "pending",
@@ -1256,6 +1280,21 @@ function pauseOthers(e: Event) {
         @click="settingsPage"
       >
         <Settings2 :size="16" /> Настройки</button
+      ><button
+        :class="{ chosen: route === '/world' }"
+        @click="navigate('/world')"
+      >
+        Мир</button
+      ><button
+        :class="{ chosen: route === '/economy' }"
+        @click="navigate('/economy')"
+      >
+        Экономика</button
+      ><button
+        :class="{ chosen: route === '/simulation' }"
+        @click="navigate('/simulation')"
+      >
+        Симуляция</button
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small
         >{{ npcs.length }} ПЕРСОНАЖЕЙ ·
@@ -1318,6 +1357,12 @@ function pauseOthers(e: Event) {
         Управление пользователями доступно администратору.
       </p>
     </section>
+    <WorldStudio
+      v-else-if="characterMode === 'world' && projectLoaded"
+      v-model="world"
+      :npcs="npcs"
+      :page="route.split('/')[1] || 'world'"
+    />
     <section
       v-else-if="characterMode === 'catalog'"
       class="character-catalog panel"

@@ -26,7 +26,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
         }
       ]
     }
@@ -58,6 +58,18 @@
     },
     {
       "source": "/settings/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/world",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/economy",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/simulation",
       "destination": "/index.html"
     }
   ]

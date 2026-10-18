@@ -1,0 +1,13 @@
+; Самостоятельная лаборатория использует то же ядро, что адаптер игры.
+config_version=5
+[application]
+config/name="Farlands Simulation Core"
+run/main_scene="res://web.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+[display]
+window/size/viewport_width=16
+window/size/viewport_height=16
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false

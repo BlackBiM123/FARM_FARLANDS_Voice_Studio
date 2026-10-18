@@ -130,3 +130,9 @@ Dialogue lines support outcome bindings, world-fact prerequisites, speaker-knowl
 The pure helpers in shared/scenario-runtime.ts validate occurrence creation, scene availability, expiry directives, confirmed outcomes and line eligibility. Expiry does not invent an autonomous outcome; the game must choose one using its real world state. Location/time/availability/fact changes can trigger reevaluation, participant availability and exclusivity keys prevent impossible concurrent scenes, and scene-gap settings prevent a burst of witnessed events. These helpers and the editor are not a background simulation running on Vercel. Godot must implement the corresponding occurrence scheduler, factual resolver, knowledge/memory store and ledger persistence.
 
 The Godot manifest carries event_model version 1, full scenario mechanics, outcome and obligation templates, facts, line gates and the source guidelines. Working examples stay drafts. The default six-hour observed-scene gap and integration keys are explicitly marked as editable technical proposals. Old clients that omit new mechanics cannot silently erase them through cloud saves.
+
+## Центр игрового мира
+
+В Studio добавлены страницы «Мир», «Экономика» и «Симуляция». Рабочее ядро написано на GDScript и запускается в браузере через Godot Web, в headless-режиме и через адаптер игровых часов.
+
+Описание возможностей, хранения, запуска и границ первой версии: [World Lab](docs/architecture/world-lab-working-version.md).

@@ -1,0 +1,206 @@
+{
+  "repository": "BlackBiM123/farm-and-farlands",
+  "revision": "ddc03a4c4d50467d439773107e14b0847c8b9467",
+  "items": [
+    {
+      "id": "axe",
+      "name": "Axe",
+      "weight": 2.5,
+      "baseValue": 60,
+      "maxStack": 1,
+      "source": "data/items/tools/axe.tres"
+    },
+    {
+      "id": "berry",
+      "name": "Berry",
+      "weight": 0.08,
+      "baseValue": 9,
+      "maxStack": 99,
+      "source": "data/items/crops/berry.tres"
+    },
+    {
+      "id": "berry_seed",
+      "name": "Berry Seed",
+      "weight": 0.02,
+      "baseValue": 10,
+      "maxStack": 99,
+      "source": "data/items/seeds/berry_seed.tres"
+    },
+    {
+      "id": "carrot",
+      "name": "Carrot",
+      "weight": 0.15,
+      "baseValue": 7,
+      "maxStack": 99,
+      "source": "data/items/crops/carrot.tres"
+    },
+    {
+      "id": "carrot_seed",
+      "name": "Carrot Seed",
+      "weight": 0.02,
+      "baseValue": 4,
+      "maxStack": 99,
+      "source": "data/items/seeds/carrot_seed.tres"
+    },
+    {
+      "id": "egg",
+      "name": "Egg",
+      "weight": 0.06,
+      "baseValue": 10,
+      "maxStack": 99,
+      "source": "data/items/processed/egg.tres"
+    },
+    {
+      "id": "fishing_rod",
+      "name": "Fishing Rod",
+      "weight": 1,
+      "baseValue": 50,
+      "maxStack": 1,
+      "source": "data/items/tools/fishing_rod.tres"
+    },
+    {
+      "id": "flour",
+      "name": "Flour",
+      "weight": 0.5,
+      "baseValue": 28,
+      "maxStack": 99,
+      "source": "data/items/processed/flour.tres"
+    },
+    {
+      "id": "golden_axe",
+      "name": "Golden Axe",
+      "weight": 2.5,
+      "baseValue": 600,
+      "maxStack": 1,
+      "source": "data/items/tools/golden_axe.tres"
+    },
+    {
+      "id": "hoe",
+      "name": "Hoe",
+      "weight": 2,
+      "baseValue": 45,
+      "maxStack": 1,
+      "source": "data/items/tools/hoe.tres"
+    },
+    {
+      "id": "iron_ingot",
+      "name": "Iron Ingot",
+      "weight": 1.5,
+      "baseValue": 42,
+      "maxStack": 99,
+      "source": "data/items/resources/iron_ingot.tres"
+    },
+    {
+      "id": "iron_ore",
+      "name": "Iron Ore",
+      "weight": 2.5,
+      "baseValue": 18,
+      "maxStack": 99,
+      "source": "data/items/resources/iron_ore.tres"
+    },
+    {
+      "id": "mayonnaise",
+      "name": "Mayonnaise",
+      "weight": 0.35,
+      "baseValue": 32,
+      "maxStack": 99,
+      "source": "data/items/processed/mayonnaise.tres"
+    },
+    {
+      "id": "mountain_trout",
+      "name": "Mountain Trout",
+      "weight": 1.1,
+      "baseValue": 42,
+      "maxStack": 99,
+      "source": "data/items/fish/mountain_trout.tres"
+    },
+    {
+      "id": "oak_board",
+      "name": "Boards",
+      "weight": 2.5,
+      "baseValue": 18,
+      "maxStack": 99,
+      "source": "data/items/resources/oak_board.tres"
+    },
+    {
+      "id": "oak_log",
+      "name": "Log",
+      "weight": 4,
+      "baseValue": 10,
+      "maxStack": 99,
+      "source": "data/items/resources/oak_log.tres"
+    },
+    {
+      "id": "perch",
+      "name": "Perch",
+      "weight": 0.7,
+      "baseValue": 24,
+      "maxStack": 99,
+      "source": "data/items/fish/perch.tres"
+    },
+    {
+      "id": "pickaxe",
+      "name": "Pickaxe",
+      "weight": 3,
+      "baseValue": 70,
+      "maxStack": 1,
+      "source": "data/items/tools/pickaxe.tres"
+    },
+    {
+      "id": "potato",
+      "name": "Potato",
+      "weight": 0.25,
+      "baseValue": 8,
+      "maxStack": 99,
+      "source": "data/items/crops/potato.tres"
+    },
+    {
+      "id": "potato_seed",
+      "name": "Potato Seed",
+      "weight": 0.02,
+      "baseValue": 6,
+      "maxStack": 99,
+      "source": "data/items/seeds/potato_seed.tres"
+    },
+    {
+      "id": "river_minnow",
+      "name": "River Minnow",
+      "weight": 0.2,
+      "baseValue": 9,
+      "maxStack": 99,
+      "source": "data/items/fish/river_minnow.tres"
+    },
+    {
+      "id": "stone",
+      "name": "Stone",
+      "weight": 3,
+      "baseValue": 6,
+      "maxStack": 99,
+      "source": "data/items/resources/stone.tres"
+    },
+    {
+      "id": "watering_can",
+      "name": "Watering Can",
+      "weight": 1.5,
+      "baseValue": 35,
+      "maxStack": 1,
+      "source": "data/items/tools/watering_can.tres"
+    },
+    {
+      "id": "wheat",
+      "name": "Wheat",
+      "weight": 0.08,
+      "baseValue": 3,
+      "maxStack": 99,
+      "source": "data/items/crops/wheat.tres"
+    },
+    {
+      "id": "wheat_seed",
+      "name": "Wheat Seed",
+      "weight": 0.02,
+      "baseValue": 4,
+      "maxStack": 99,
+      "source": "data/items/seeds/wheat_seed.tres"
+    }
+  ]
+}
