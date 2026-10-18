@@ -1607,3 +1607,148 @@ textarea.auto-growing-text {
 .family-page .tree-viewport { min-width: 0; max-width: 100%; }
 
 .character-card input[type="file"] { display: none; }
+
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+  padding: 14px;
+  margin-top: 14px;
+  border: 1px solid #b991592b;
+  border-radius: 7px;
+  background: #14181c;
+}
+.catalog-filter-buttons {
+  display: flex;
+  gap: 6px;
+}
+.catalog-filter-buttons button {
+  min-width: 36px;
+  height: 36px;
+  padding: 8px;
+  display: grid;
+  place-items: center;
+}
+.catalog-filter-buttons button.active {
+  color: #f0c476;
+  background: #b991592b;
+  border-color: #d0a45f;
+}
+.catalog-filter-buttons .catalog-romance.active {
+  color: #f49cae;
+  border-color: #dd8198;
+  background: #ba527029;
+}
+.catalog-filter-select {
+  display: grid;
+  gap: 5px;
+  color: #b5ac9e;
+  font-size: 11px;
+  min-width: 0;
+}
+.catalog-filter-select select {
+  max-width: 220px;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.catalog-age-range {
+  min-width: 220px;
+  flex: 1;
+  max-width: 330px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #b5ac9e;
+  font-size: 11px;
+}
+.catalog-age-range legend {
+  margin-bottom: 5px;
+}
+.catalog-age-sliders {
+  display: flex;
+  gap: 12px;
+}
+.catalog-age-sliders label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.catalog-age-sliders input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  height: 20px;
+  accent-color: #d0a45f;
+  cursor: pointer;
+}
+.catalog-age-sliders output {
+  min-width: 23px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.catalog-unknown-age {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+.catalog-unknown-age input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #d0a45f;
+}
+.catalog-sort-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-left: auto;
+}
+.catalog-sort-controls button {
+  display: grid;
+  place-items: center;
+  height: 34px;
+  padding: 8px;
+}
+.catalog-results {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  margin-top: 8px;
+  color: #a49c8d;
+  font-size: 11px;
+}
+.catalog-results button {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+@media (max-width: 760px) {
+  .catalog-filters {
+    gap: 12px;
+    padding: 12px;
+  }
+  .catalog-filters > .catalog-filter-select {
+    flex: 1;
+  }
+  .catalog-filter-select select {
+    width: 100%;
+    max-width: 100%;
+  }
+  .catalog-age-range {
+    flex-basis: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+  .catalog-sort-controls {
+    width: 100%;
+    margin-left: 0;
+  }
+  .catalog-sort-controls .catalog-filter-select {
+    flex: 1;
+  }
+}

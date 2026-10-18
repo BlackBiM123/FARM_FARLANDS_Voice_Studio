@@ -20,6 +20,8 @@ import {
   Upload,
   ArrowRight,
   Headphones,
+  Heart,
+  ArrowUpDown,
 } from "lucide-vue-next";
 import JSZip from "jszip";
 import { readCharacterPhoto } from "./character-image";
@@ -480,6 +482,97 @@ const npc = computed(() => npcs.value.find((x) => x.id === selected.value)!),
       (x.name + " " + x.role).toLowerCase().includes(query.value.toLowerCase()),
     ),
   );
+const catalogGender = ref(""),
+  catalogRomance = ref(false),
+  catalogFamily = ref("");
+const catalogSort = ref("name"),
+  catalogDescending = ref(false);
+const catalogAgeMin = ref(0),
+  catalogAgeMax = ref(150),
+  catalogUnknownAge = ref(true);
+const catalogFamilies = computed(() =>
+  [...families.value].sort((a, b) => a.name.localeCompare(b.name, "ru")),
+);
+const characterFamilyNames = (id: string) =>
+  families.value
+    .filter((f) => f.members.includes(id))
+    .map((f) => f.name)
+    .sort((a, b) => a.localeCompare(b, "ru"))
+    .join(", ");
+const catalogFiltered = computed(() => {
+  const result = filtered.value.filter(
+    (n) =>
+      (!catalogGender.value || n.profile.gender === catalogGender.value) &&
+      (!catalogRomance.value || n.profile.romanceAvailable) &&
+      (!catalogFamily.value ||
+        (catalogFamily.value === "none"
+          ? !families.value.some((f) => f.members.includes(n.id))
+          : families.value.some(
+              (f) => f.id === catalogFamily.value && f.members.includes(n.id),
+            ))) &&
+      (n.profile.age === null
+        ? catalogUnknownAge.value
+        : n.profile.age >= catalogAgeMin.value &&
+          n.profile.age <= catalogAgeMax.value),
+  );
+  const direction = catalogDescending.value ? -1 : 1;
+  return result.sort((a, b) => {
+    let order = 0;
+    if (catalogSort.value === "age") {
+      if (a.profile.age === null || b.profile.age === null)
+        return a.profile.age === b.profile.age
+          ? a.name.localeCompare(b.name, "ru")
+          : a.profile.age === null
+            ? 1
+            : -1;
+      order = a.profile.age - b.profile.age;
+    } else if (catalogSort.value === "gender") {
+      const genders = { male: 0, female: 1, other: 2, unspecified: 3 };
+      order = genders[a.profile.gender] - genders[b.profile.gender];
+    } else if (catalogSort.value === "family") {
+      const af = characterFamilyNames(a.id),
+        bf = characterFamilyNames(b.id);
+      if (!af || !bf)
+        return af === bf ? a.name.localeCompare(b.name, "ru") : !af ? 1 : -1;
+      order = af.localeCompare(bf, "ru");
+    } else order = a.name.localeCompare(b.name, "ru");
+    return order * direction || a.name.localeCompare(b.name, "ru");
+  });
+});
+const catalogFiltersActive = computed(
+  () =>
+    !!(
+      query.value ||
+      catalogGender.value ||
+      catalogRomance.value ||
+      catalogFamily.value ||
+      catalogAgeMin.value !== 0 ||
+      catalogAgeMax.value !== 150 ||
+      !catalogUnknownAge.value ||
+      catalogSort.value !== "name" ||
+      catalogDescending.value
+    ),
+);
+function resetCatalogFilters() {
+  query.value = "";
+  catalogGender.value = "";
+  catalogRomance.value = false;
+  catalogFamily.value = "";
+  catalogAgeMin.value = 0;
+  catalogAgeMax.value = 150;
+  catalogUnknownAge.value = true;
+  catalogSort.value = "name";
+  catalogDescending.value = false;
+}
+function setCatalogAge(event: Event, bound: "min" | "max") {
+  const value = Number((event.target as HTMLInputElement).value);
+  if (bound === "min")
+    catalogAgeMin.value = Math.min(value, catalogAgeMax.value);
+  else catalogAgeMax.value = Math.max(value, catalogAgeMin.value);
+  (event.target as HTMLInputElement).value = String(
+    bound === "min" ? catalogAgeMin.value : catalogAgeMax.value,
+  );
+}
 const takes = ref<Take[]>([]),
   busy = ref(false),
   notice = ref(""),
@@ -1247,7 +1340,127 @@ function pauseOthers(e: Event) {
           placeholder="Найти персонажа"
           aria-label="Поиск персонажей"
       /></label>
-      <p v-if="!filtered.length" class="hint">
+      <div class="catalog-filters">
+        <div
+          class="catalog-filter-buttons"
+          role="group"
+          aria-label="Фильтры персонажей"
+        >
+          <button
+            type="button"
+            class="catalog-romance"
+            :class="{ active: catalogRomance }"
+            :aria-pressed="catalogRomance"
+            aria-label="Только с романтической линией"
+            title="Романтическая линия"
+            @click="catalogRomance = !catalogRomance"
+          >
+            <Heart
+              :size="17"
+              :fill="catalogRomance ? 'currentColor' : 'none'"
+            />
+          </button>
+          <button
+            type="button"
+            :class="{ active: catalogGender === 'male' }"
+            :aria-pressed="catalogGender === 'male'"
+            aria-label="Мужские персонажи"
+            @click="catalogGender = catalogGender === 'male' ? '' : 'male'"
+          >
+            М
+          </button>
+          <button
+            type="button"
+            :class="{ active: catalogGender === 'female' }"
+            :aria-pressed="catalogGender === 'female'"
+            aria-label="Женские персонажи"
+            @click="catalogGender = catalogGender === 'female' ? '' : 'female'"
+          >
+            Ж
+          </button>
+        </div>
+        <label class="catalog-filter-select"
+          >Семья / группа
+          <select v-model="catalogFamily" aria-label="Фильтр по семье">
+            <option value="">Все</option>
+            <option value="none">Без семьи / группы</option>
+            <option v-for="f in catalogFamilies" :key="f.id" :value="f.id">
+              {{ f.name }}
+            </option>
+          </select>
+        </label>
+        <fieldset class="catalog-age-range">
+          <legend>Возраст: {{ catalogAgeMin }}–{{ catalogAgeMax }} лет</legend>
+          <div class="catalog-age-sliders">
+            <label
+              >От
+              <input
+                type="range"
+                min="0"
+                max="150"
+                step="1"
+                :value="catalogAgeMin"
+                aria-label="Минимальный возраст"
+                @input="setCatalogAge($event, 'min')"
+              /><output>{{ catalogAgeMin }}</output></label
+            >
+            <label
+              >До
+              <input
+                type="range"
+                min="0"
+                max="150"
+                step="1"
+                :value="catalogAgeMax"
+                aria-label="Максимальный возраст"
+                @input="setCatalogAge($event, 'max')"
+              /><output>{{ catalogAgeMax }}</output></label
+            >
+          </div>
+          <label class="catalog-unknown-age"
+            ><input v-model="catalogUnknownAge" type="checkbox" />Включать без
+            возраста</label
+          >
+        </fieldset>
+        <div class="catalog-sort-controls">
+          <label class="catalog-filter-select"
+            >Сортировка<select
+              v-model="catalogSort"
+              aria-label="Сортировка персонажей"
+            >
+              <option value="name">По имени</option>
+              <option value="gender">По полу</option>
+              <option value="age">По возрасту</option>
+              <option value="family">По семье</option>
+            </select></label
+          >
+          <button
+            type="button"
+            :aria-label="
+              catalogDescending
+                ? 'Сортировка по убыванию'
+                : 'Сортировка по возрастанию'
+            "
+            :aria-pressed="catalogDescending"
+            :title="catalogDescending ? 'По убыванию' : 'По возрастанию'"
+            @click="catalogDescending = !catalogDescending"
+          >
+            <ArrowUpDown :size="16" />
+          </button>
+        </div>
+      </div>
+      <div class="catalog-results">
+        <span aria-live="polite"
+          >Показано {{ catalogFiltered.length }} из {{ npcs.length }}</span
+        ><button
+          v-if="catalogFiltersActive"
+          type="button"
+          @click="resetCatalogFilters"
+        >
+          Сбросить фильтры
+        </button>
+      </div>
+      <p v-if="!catalogFiltered.length" class="hint">
         {{
           npcs.length
             ? "Персонажи не найдены"
@@ -1256,7 +1469,7 @@ function pauseOthers(e: Event) {
       </p>
       <div class="character-cards">
         <article
-          v-for="n in filtered"
+          v-for="n in catalogFiltered"
           :key="n.id"
           class="character-card"
           role="link"
@@ -1286,9 +1499,19 @@ function pauseOthers(e: Event) {
             @change="updateCatalogPhoto(n, $event)"
           />
           <h3>{{ n.name }}</h3>
-          <span class="character-age">{{ n.profile.age === null ? "—" : n.profile.age + " лет" }}</span>
-          <p class="character-summary" :title="n.role || n.profile.personality || n.profile.biography">
-            {{ n.role || n.profile.personality || n.profile.biography || "Описание ещё не заполнено" }}
+          <span class="character-age">{{
+            n.profile.age === null ? "—" : n.profile.age + " лет"
+          }}</span>
+          <p
+            class="character-summary"
+            :title="n.role || n.profile.personality || n.profile.biography"
+          >
+            {{
+              n.role ||
+              n.profile.personality ||
+              n.profile.biography ||
+              "Описание ещё не заполнено"
+            }}
           </p>
           <button
             type="button"
