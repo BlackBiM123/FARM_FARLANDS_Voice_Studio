@@ -146,7 +146,8 @@ test("family story entries have independent tabs and disclosure notes", async ({
     "раскрываются независимо",
   );
   await page.getByRole("tab", { name: "История группы", exact: true }).click();
-  await expect(page.locator("#story-original-panel")).toContainText(
-    "Общая история",
-  );
+  await expect(page.locator("#story-original-panel")).toContainText("Общая история");
+  await page.getByRole("button", {name:"Закрыть историю",exact:true}).click();
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

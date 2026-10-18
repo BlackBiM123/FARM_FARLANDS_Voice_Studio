@@ -1592,3 +1592,8 @@ textarea.auto-growing-text {
   .schedule-fields label:nth-child(4), .schedule-fields .schedule-activity { grid-column:1/-1; }
   .schedule-row { align-items:flex-start; }
 }
+
+.family-page { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.family-page > * { min-width: 0; max-width: 100%; }
+.family-story-button > span { min-width: 0; overflow-wrap: anywhere; }
+.family-page .tree-viewport { min-width: 0; max-width: 100%; }
