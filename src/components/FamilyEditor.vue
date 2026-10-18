@@ -260,7 +260,7 @@ function move(e: PointerEvent) {
       <section class="panel family-meta">
         <label
           >Тип группы<select v-model="draft.kind">
-            <option :value="undefined">Семья</option>
+            <option :value="draft.kind === undefined ? undefined : 'family'">Семья</option>
             <option value="household">Домохозяйство</option>
             <option value="expedition">Экспедиция</option>
             <option value="organization">Организация</option>
