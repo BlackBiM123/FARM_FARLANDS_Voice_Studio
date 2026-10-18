@@ -1609,146 +1609,48 @@ textarea.auto-growing-text {
 .character-card input[type="file"] { display: none; }
 
 .catalog-filters {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto minmax(130px, 180px) minmax(240px, 300px) auto;
   align-items: center;
-  gap: 14px 18px;
-  padding: 14px;
-  margin-top: 14px;
+  gap: 10px;
+  padding: 10px;
+  margin-top: 16px;
   border: 1px solid #b991592b;
   border-radius: 7px;
   background: #14181c;
 }
-.catalog-filter-buttons {
-  display: flex;
-  gap: 6px;
+.catalog-filters .catalog-search { width: 100%; max-width: none; min-width: 0; height: 32px; margin: 0; padding: 0 9px; gap: 7px; }
+.catalog-search input { width: 100%; min-width: 0; padding: 0; font-size: 12px; }
+.catalog-filter-buttons { display: flex; gap: 4px; }
+.catalog-filter-buttons button { min-width: 32px; height: 32px; padding: 6px; display: grid; place-items: center; font-size: 12px; }
+.catalog-filter-buttons button.active { color: #f0c476; background: #b991592b; border-color: #d0a45f; }
+.catalog-filter-buttons .catalog-romance.active { color: #f49cae; border-color: #dd8198; background: #ba527029; }
+.catalog-control-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.catalog-filter-select { display: block; min-width: 0; margin: 0; }
+.catalog-filter-select select { width: 100%; min-width: 0; height: 32px; margin: 0; padding: 5px 8px; font-size: 12px; }
+.catalog-age-range { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 0 10px; height: 32px; border: 0; border-left: 1px solid #ffffff14; border-right: 1px solid #ffffff14; color: #b5ac9e; font-size: 11px; }
+.catalog-age-caption { flex: 0 0 auto; }
+.catalog-age-sliders { display: flex; gap: 8px; min-width: 0; flex: 1; }
+.catalog-age-sliders label { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; margin: 0; font-size: 10px; }
+.catalog-age-sliders input[type="range"] { width: 100%; min-width: 0; padding: 0; margin: 0; height: 20px; accent-color: #d0a45f; cursor: pointer; }
+.catalog-age-sliders output { min-width: 20px; text-align: right; font-variant-numeric: tabular-nums; }
+.catalog-unknown-age { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 11px; cursor: pointer; }
+.catalog-unknown-age input { width: 13px; height: 13px; padding: 0; margin: 0; accent-color: #d0a45f; }
+.catalog-sort-controls { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.catalog-sort-controls button { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; padding: 6px; }
+.catalog-results { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-height: 28px; margin-top: 6px; color: #a49c8d; font-size: 11px; }
+.catalog-results > span { margin-left: auto; }
+.catalog-results button { padding: 3px 7px; font-size: 11px; }
+.character-catalog .character-cards { margin-top: 8px; }
+@media (max-width: 1100px) {
+  .catalog-filters { grid-template-columns: minmax(130px, 1fr) auto minmax(120px, 1fr) auto; gap: 8px; }
+  .catalog-age-range { grid-row: 2; grid-column: 1 / -1; border: 0; padding: 0; max-width: 400px; }
 }
-.catalog-filter-buttons button {
-  min-width: 36px;
-  height: 36px;
-  padding: 8px;
-  display: grid;
-  place-items: center;
-}
-.catalog-filter-buttons button.active {
-  color: #f0c476;
-  background: #b991592b;
-  border-color: #d0a45f;
-}
-.catalog-filter-buttons .catalog-romance.active {
-  color: #f49cae;
-  border-color: #dd8198;
-  background: #ba527029;
-}
-.catalog-filter-select {
-  display: grid;
-  gap: 5px;
-  color: #b5ac9e;
-  font-size: 11px;
-  min-width: 0;
-}
-.catalog-filter-select select {
-  max-width: 220px;
-  min-height: 34px;
-  padding: 6px 10px;
-  font-size: 12px;
-}
-.catalog-age-range {
-  min-width: 220px;
-  flex: 1;
-  max-width: 330px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  color: #b5ac9e;
-  font-size: 11px;
-}
-.catalog-age-range legend {
-  margin-bottom: 5px;
-}
-.catalog-age-sliders {
-  display: flex;
-  gap: 12px;
-}
-.catalog-age-sliders label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex: 1;
-}
-.catalog-age-sliders input[type="range"] {
-  width: 100%;
-  min-width: 0;
-  padding: 0;
-  height: 20px;
-  accent-color: #d0a45f;
-  cursor: pointer;
-}
-.catalog-age-sliders output {
-  min-width: 23px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.catalog-unknown-age {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 5px;
-}
-.catalog-unknown-age input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: #d0a45f;
-}
-.catalog-sort-controls {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  margin-left: auto;
-}
-.catalog-sort-controls button {
-  display: grid;
-  place-items: center;
-  height: 34px;
-  padding: 8px;
-}
-.catalog-results {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 32px;
-  margin-top: 8px;
-  color: #a49c8d;
-  font-size: 11px;
-}
-.catalog-results button {
-  padding: 4px 8px;
-  font-size: 11px;
-}
-@media (max-width: 760px) {
-  .catalog-filters {
-    gap: 12px;
-    padding: 12px;
-  }
-  .catalog-filters > .catalog-filter-select {
-    flex: 1;
-  }
-  .catalog-filter-select select {
-    width: 100%;
-    max-width: 100%;
-  }
-  .catalog-age-range {
-    flex-basis: 100%;
-    max-width: none;
-    min-width: 0;
-  }
-  .catalog-sort-controls {
-    width: 100%;
-    margin-left: 0;
-  }
-  .catalog-sort-controls .catalog-filter-select {
-    flex: 1;
-  }
+@media (max-width: 600px) {
+  .catalog-filters { grid-template-columns: auto minmax(0, 1fr); padding: 8px; }
+  .catalog-search { grid-column: 1 / -1; }
+  .catalog-age-range { grid-row: 3; grid-column: 1 / -1; width: 100%; max-width: none; }
+  .catalog-sort-controls { grid-column: 1 / -1; }
+  .catalog-sort-controls .catalog-filter-select { flex: 1; }
+  .catalog-results { gap: 6px 10px; }
 }

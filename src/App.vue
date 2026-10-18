@@ -1334,13 +1334,13 @@ function pauseOthers(e: Event) {
           <Plus :size="16" />Создать персонажа
         </button>
       </div>
-      <label class="search"
-        ><Search :size="16" /><input
-          v-model="query"
-          placeholder="Найти персонажа"
-          aria-label="Поиск персонажей"
-      /></label>
       <div class="catalog-filters">
+        <label class="search catalog-search"
+          ><Search :size="15" /><input
+            v-model="query"
+            placeholder="Найти персонажа"
+            aria-label="Поиск персонажей"
+        /></label>
         <div
           class="catalog-filter-buttons"
           role="group"
@@ -1380,9 +1380,9 @@ function pauseOthers(e: Event) {
           </button>
         </div>
         <label class="catalog-filter-select"
-          >Семья / группа
+          ><span class="catalog-control-label">Семья / группа</span>
           <select v-model="catalogFamily" aria-label="Фильтр по семье">
-            <option value="">Все</option>
+            <option value="">Все семьи / группы</option>
             <option value="none">Без семьи / группы</option>
             <option v-for="f in catalogFamilies" :key="f.id" :value="f.id">
               {{ f.name }}
@@ -1390,7 +1390,10 @@ function pauseOthers(e: Event) {
           </select>
         </label>
         <fieldset class="catalog-age-range">
-          <legend>Возраст: {{ catalogAgeMin }}–{{ catalogAgeMax }} лет</legend>
+          <legend class="catalog-control-label">
+            Возраст: {{ catalogAgeMin }}–{{ catalogAgeMax }} лет
+          </legend>
+          <span class="catalog-age-caption" aria-hidden="true">Возраст</span>
           <div class="catalog-age-sliders">
             <label
               >От
@@ -1417,17 +1420,11 @@ function pauseOthers(e: Event) {
               /><output>{{ catalogAgeMax }}</output></label
             >
           </div>
-          <label class="catalog-unknown-age"
-            ><input v-model="catalogUnknownAge" type="checkbox" />Включать без
-            возраста</label
-          >
         </fieldset>
         <div class="catalog-sort-controls">
           <label class="catalog-filter-select"
-            >Сортировка<select
-              v-model="catalogSort"
-              aria-label="Сортировка персонажей"
-            >
+            ><span class="catalog-control-label">Сортировка</span
+            ><select v-model="catalogSort" aria-label="Сортировка персонажей">
               <option value="name">По имени</option>
               <option value="gender">По полу</option>
               <option value="age">По возрасту</option>
@@ -1450,6 +1447,16 @@ function pauseOthers(e: Event) {
         </div>
       </div>
       <div class="catalog-results">
+        <label
+          class="catalog-unknown-age"
+          title="Включать персонажей без указанного возраста"
+          ><input
+            v-model="catalogUnknownAge"
+            type="checkbox"
+            aria-label="Включать без возраста"
+          />Без возраста</label
+        >
+
         <span aria-live="polite"
           >Показано {{ catalogFiltered.length }} из {{ npcs.length }}</span
         ><button
