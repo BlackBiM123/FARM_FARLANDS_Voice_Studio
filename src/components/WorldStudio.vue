@@ -454,6 +454,8 @@ function receive(event: MessageEvent) {
 }
 async function applyReport(value: WorldReport) {
   report.value = value;
+  if (!value.state.agents[selectedAgent.value])
+    selectedAgent.value = Object.keys(value.state.agents)[0] ?? "";
   try {
     await saveLocalReport(value);
   } catch {

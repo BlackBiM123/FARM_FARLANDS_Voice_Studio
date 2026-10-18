@@ -189,6 +189,9 @@ test("world editors and the real Godot Web core preserve lore and match headless
   await expect(page.locator(".world-run-controls strong").first()).toHaveText(
     "День 8 · 06:00",
   );
+  await expect(page.getByLabel("Наблюдать", { exact: true })).toHaveValue(
+    "npc_theo_hartley",
+  );
   const stored = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("farlands-empty-studio-project")!),
   );
