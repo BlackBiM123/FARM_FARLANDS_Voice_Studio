@@ -1255,75 +1255,49 @@ function pauseOthers(e: Event) {
         }}
       </p>
       <div class="character-cards">
-        <article v-for="n in filtered" :key="n.id" class="character-card">
-          <div class="character-card-heading">
-            <button
-              type="button"
-              class="portrait small-portrait catalog-photo-button"
-              :disabled="photoUploading === n.id"
-              :aria-busy="photoUploading === n.id"
-              :aria-label="'Заменить фото ' + n.name"
-              @click="chooseCatalogPhoto"
-            >
-              <img v-if="n.photo" :src="n.photo" :alt="n.name" /><template
-                v-else
-                >{{ n.name.slice(0, 1) }}</template
-              >
-            </button>
-            <input
-              type="file"
-              class="visually-hidden"
-              accept="image/jpeg,image/png,image/webp"
-              :aria-label="'Фото ' + n.name"
-              @change="updateCatalogPhoto(n, $event)"
-            />
-            <div>
-              <h3>{{ n.name }}</h3>
-              <small>{{ n.role || "Роль не указана" }}</small>
-            </div>
-          </div>
-          <p>
-            {{ n.profile.settlement || n.profile.region || "Регион не указан" }}
-            ·
-            {{
-              n.profile.age === null
-                ? "Возраст не указан"
-                : n.profile.age + " лет"
-            }}
-          </p>
-          <p class="character-summary">
-            {{
-              n.profile.personality ||
-              n.profile.biography ||
-              "Описание ещё не заполнено"
-            }}
-          </p>
-          <small
-            >{{ n.profile.relationships.length }} связей ·
-            {{
-              n.settings.designedVoice?.id === n.settings.voice
-                ? n.settings.designedVoice.name
-                : n.settings.voice
-            }}</small
+        <article
+          v-for="n in filtered"
+          :key="n.id"
+          class="character-card"
+          role="link"
+          tabindex="0"
+          :aria-label="'Открыть персонажа ' + n.name"
+          @click="openCharacter(n.id)"
+          @keydown.enter.self.prevent="openCharacter(n.id)"
+          @keydown.space.self.prevent="openCharacter(n.id)"
+        >
+          <button
+            type="button"
+            class="portrait small-portrait catalog-photo-button"
+            :disabled="photoUploading === n.id"
+            :aria-busy="photoUploading === n.id"
+            :aria-label="'Заменить фото ' + n.name"
+            @click.stop="chooseCatalogPhoto"
           >
-          <div class="character-card-actions">
-            <button
-              class="danger"
-              :aria-label="'Удалить ' + n.name"
-              @click="askDelete(n)"
-            >
-              <Trash2 :size="16" />
-            </button>
-            <button @click="openCharacter(n.id)">Редактировать</button
-            ><button
-              @click="
-                selected = n.id;
-                voicePage('studio');
-              "
-            >
-              Открыть голос
-            </button>
-          </div>
+            <img v-if="n.photo" :src="n.photo" :alt="n.name" />
+            <template v-else>{{ n.name.slice(0, 1) }}</template>
+          </button>
+          <input
+            type="file"
+            class="visually-hidden"
+            accept="image/jpeg,image/png,image/webp"
+            :aria-label="'Фото ' + n.name"
+            @click.stop
+            @change="updateCatalogPhoto(n, $event)"
+          />
+          <h3>{{ n.name }}</h3>
+          <span class="character-age">{{ n.profile.age === null ? "—" : n.profile.age + " лет" }}</span>
+          <p class="character-summary" :title="n.role || n.profile.personality || n.profile.biography">
+            {{ n.role || n.profile.personality || n.profile.biography || "Описание ещё не заполнено" }}
+          </p>
+          <button
+            type="button"
+            class="danger character-delete"
+            :aria-label="'Удалить ' + n.name"
+            @click.stop="askDelete(n)"
+          >
+            <Trash2 :size="16" />
+          </button>
         </article>
       </div>
     </section>

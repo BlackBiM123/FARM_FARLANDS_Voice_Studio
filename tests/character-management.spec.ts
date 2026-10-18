@@ -108,11 +108,22 @@ test("clean links, portrait replacement and typed-name deletion preserve unrelat
     "Анна Тестова",
   );
   await page.goForward();
+  const row = page.getByRole("link", { name: "Открыть персонажа Анна Тестова", exact: true });
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/characters\/npc_delete_me\/edit$/);
+  await page.goBack();
+  await row.click();
+  await expect(page).toHaveURL(/\/characters\/npc_delete_me\/edit$/);
+  await page.goBack();
+  await expect(page.getByRole("button", { name: "Открыть голос", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Редактировать", exact: true })).toHaveCount(0);
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page
     .getByRole("button", { name: "Удалить Анна Тестова", exact: true })
     .click();
+  await expect(page).toHaveURL(/\/characters$/);
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Введите имя и фамилию полностью").fill("Анна");
