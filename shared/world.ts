@@ -85,6 +85,16 @@ export const worldSchema = z
       outputAmount: z.number().int().min(1).max(100),
       minutes: z.number().int().min(10).max(1440),
     }),
+    cooking: z
+      .object({
+        enabled: z.boolean(),
+        input: id,
+        output: id,
+        inputAmount: z.number().int().min(1).max(100),
+        outputAmount: z.number().int().min(1).max(100),
+        minutes: z.number().int().min(10).max(1440),
+      })
+      .optional(),
     needs: needsSchema.optional(),
     protectedFacts: z.array(z.string().max(200)).max(100),
   })
@@ -105,6 +115,27 @@ export const worldSchema = z
         .size !== w.stocks.length
     )
       fail("Повтор склада с тем же владельцем и товаром");
+    if (w.cooking?.enabled) {
+      const recipe = w.cooking;
+      if (
+        recipe.input !== w.production.output ||
+        recipe.input === recipe.output ||
+        !w.items.some((x) => x.id === recipe.output)
+      )
+        fail(
+          "Кухня должна использовать результат производства и отдельный товар блюда",
+        );
+      for (const item of [recipe.input, recipe.output])
+        if (
+          !w.stocks.some(
+            (s) =>
+              s.place === "tavern" &&
+              s.owner === "inn_business" &&
+              s.item === item,
+          )
+        )
+          fail("Кухне нужны склады сырья и блюд в таверне");
+    }
     const p = new Set(w.places.map((x) => x.id)),
       a = new Set(w.accounts.map((x) => x.id)),
       i = new Set(w.items.map((x) => x.id));
@@ -187,6 +218,7 @@ export type WorldState = {
   owners: Record<string, string>;
   events: WorldEvent[];
   nextEvent: number;
+  cookingMinutes?: number;
   productionMinutes: number;
   ledger: string[];
   protectedFacts: string[];
@@ -262,6 +294,7 @@ const stateSchema = z.object({
     )
     .max(15000),
   nextEvent: num,
+  cookingMinutes: num.optional(),
   productionMinutes: num,
   ledger: z.array(z.string()).max(20000),
   protectedFacts: z.array(z.string()),

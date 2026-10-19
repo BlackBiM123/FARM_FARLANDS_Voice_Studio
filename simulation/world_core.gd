@@ -11,6 +11,23 @@ var event_sink: Callable
 func _rule(key: String, fallback: int) -> int:
 	return int(definition.get("needs",{}).get(key,fallback))
 
+func _delivery_amount(npc: Dictionary) -> int:
+	if not _cooking(): return 2
+	var p: Dictionary=definition.production
+	var r: Dictionary=definition.cooking
+	var daily:=maxi(1,int(ceil(1440.0*_rule("fullnessDrain",1)/maxi(1,_rule("mealGain",650)))))
+	var target:=maxi(1,int(ceil(float(definition.agents.size()*daily*int(r.inputAmount))/int(r.outputAmount))))
+	var needed:=maxi(0,target-_stock_amount("tavern","inn_business",p.output)-int(floor(float(_stock_amount("tavern","inn_business",r.output))*int(r.inputAmount)/int(r.outputAmount))))
+	var capacity:=int(floor(float(npc.get("carryCapacity",10))/maxf(0.001,_weight(p.output))))
+	var affordable:=10000000 if _price(p.output)==0 else int(floor(float(state.accounts.get("inn_business",0))/_price(p.output)))
+	return mini(needed,mini(capacity,mini(affordable,_stock_amount(p.place,p.owner,p.output))))
+
+func _cooking() -> bool:
+	return definition.get("cooking",{}).get("enabled",false)
+
+func _food() -> String:
+	return str(definition.cooking.output) if _cooking() else "potato"
+
 func start(world: Dictionary, content_hash: String) -> Dictionary:
 	error = ""
 	definition = world.duplicate(true)
@@ -24,6 +41,7 @@ func start(world: Dictionary, content_hash: String) -> Dictionary:
 		var item: String = stock.item
 		state.baselineItems[item] = int(state.baselineItems.get(item,0)) + int(stock.amount)
 	state.owners[world.house.place] = world.house.seller
+	if _cooking(): state.cookingMinutes=0
 	state.obligations=[]
 	if event_sink.is_valid(): state.journalMode="external"
 	for npc in world.agents:
@@ -168,6 +186,8 @@ func _tick(npc: Dictionary, a: Dictionary) -> void:
 			a.workMinutes += 1
 			if npc.role == "farmer":
 				_produce(npc)
+			if npc.role == "innkeeper":
+				_cook(npc,a)
 		if action.type == "travel":
 			action.elapsed = int(action.elapsed)+1
 			var legs: Array = action.legs
@@ -191,8 +211,8 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	var buy_score := 95 if npc.goalHouse and not a.ownsHouse and _available(npc.account)>=int(house.price) and state.owners.get(house.place,"")==house.seller else -1
 	var evening := clock>=1020 and clock<1260
 	var social_score := 40 if evening else -1
-	var delivery_score := 55+int(npc.helpfulness)/8 if npc.role=="stable" and clock>=960 and clock<1200 and not state.ledger.has("delivery:"+str(_day())) and _stock_amount(definition.production.place,definition.production.owner,definition.production.output)>=2 else -1
-	var import_score := 110 if npc.role=="stable" and clock>=480 and clock<1200 and _stock_amount("tavern","inn_business","potato")<20 and _stock_amount("pier","outside","potato")>=10 and int(state.accounts.get("inn_business",0))>=10*_price("potato") and not _cargo_in_transit("potato") else -1
+	var delivery_score := (110 if _cooking() else 55+int(npc.helpfulness)/8) if npc.role=="stable" and clock>=(480 if _cooking() else 960) and clock<1200 and (_cooking() or not state.ledger.has("delivery:"+str(_day()))) and _delivery_amount(npc)>0 and (_cooking() or _stock_amount(definition.production.place,definition.production.owner,definition.production.output)>=2) else -1
+	var import_score := 110 if not _cooking() and npc.role=="stable" and clock>=480 and clock<1200 and _stock_amount("tavern","inn_business","potato")<20 and _stock_amount("pier","outside","potato")>=10 and int(state.accounts.get("inn_business",0))>=10*_price(_food()) and not _cargo_in_transit("potato") else -1
 	if not _reachable(a.place,npc.work): work_score=-1
 	if not _reachable(a.place,a.home): sleep_score=-1
 	if not _reachable(a.place,house.place): buy_score=-1
@@ -203,9 +223,9 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	if not _reachable(a.place,definition.production.place) or not _reachable(definition.production.place,"tavern"): delivery_score=-1
 	if not _reachable(a.place,"pier") or not _reachable("pier","tavern"): import_score=-1
 	if 10*_weight("potato")>float(npc.get("carryCapacity",10)): import_score=-1
-	if 2*_weight(definition.production.output)>float(npc.get("carryCapacity",10)): delivery_score=-1
-	if not _reachable(a.place,"tavern") or _stock_amount("tavern","inn_business","potato")==0 or int(state.accounts[npc.account])<_price("potato"): eat_score=-1
-	a.choices = [{"action":"Отдых","score":sleep_score,"reason":"Энергия %d/1000, порог %d; ночь 22:00–06:00. %s" % [int(a.energy),_rule("restThreshold",150),"Дом доступен" if _reachable(a.place,a.home) else "Нет пути домой"]},{"action":"Поесть","score":eat_score,"reason":"Сытость %d/1000, порог %d. %s" % [int(a.hunger),_rule("eatThreshold",300),"Нет пути в таверну" if not _reachable(a.place,"tavern") else ("Нет еды в таверне" if _stock_amount("tavern","inn_business","potato")==0 else ("Не хватает денег на еду" if int(state.accounts[npc.account])<_price("potato") else "Еда и деньги доступны"))]},{"action":"Купить дом","score":buy_score,"reason":"Достаточно собственных средств и есть продавец"},{"action":"Работа","score":work_score,"reason":"Обязательство 08:00–16:00"},{"action":"Перевозка","score":delivery_score,"reason":"Есть груз фермы; оплачивает таверна"},{"action":"Общение","score":social_score,"reason":"Свободный вечер и согласие второго участника"},{"action":"Свободное время","score":0,"reason":"Нет более важных доступных дел"}]
+	if _delivery_amount(npc)*_weight(definition.production.output)>float(npc.get("carryCapacity",10)): delivery_score=-1
+	if not _reachable(a.place,"tavern") or _stock_amount("tavern","inn_business",_food())==0 or int(state.accounts[npc.account])<_price(_food()): eat_score=-1
+	a.choices = [{"action":"Отдых","score":sleep_score,"reason":"Энергия %d/1000, порог %d; ночь 22:00–06:00. %s" % [int(a.energy),_rule("restThreshold",150),"Дом доступен" if _reachable(a.place,a.home) else "Нет пути домой"]},{"action":"Поесть","score":eat_score,"reason":"Сытость %d/1000, порог %d. %s" % [int(a.hunger),_rule("eatThreshold",300),"Нет пути в таверну" if not _reachable(a.place,"tavern") else ("Нет еды в таверне" if _stock_amount("tavern","inn_business",_food())==0 else ("Не хватает денег на еду" if int(state.accounts[npc.account])<_price(_food()) else "Еда и деньги доступны"))]},{"action":"Купить дом","score":buy_score,"reason":"Достаточно собственных средств и есть продавец"},{"action":"Работа","score":work_score,"reason":"Обязательство 08:00–16:00"},{"action":"Перевозка","score":delivery_score,"reason":"Есть груз фермы; оплачивает таверна"},{"action":"Общение","score":social_score,"reason":"Свободный вечер и согласие второго участника"},{"action":"Свободное время","score":0,"reason":"Нет более важных доступных дел"}]
 	var best: Dictionary = a.choices[0]
 	a.choices.append({"action":"Пополнить запас еды","score":import_score,"reason":"Таверне нужна еда; есть продавец, деньги и маршрут через причал"})
 	for choice in a.choices:
@@ -222,7 +242,7 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	match best.action:
 		"Отдых": _at(npc,a,a.home,{"type":"rest","remaining":60})
 		"Поесть":
-			if int(state.accounts[npc.account]) >= _price("potato") and _stock_amount("tavern","inn_business","potato")>0:
+			if int(state.accounts[npc.account]) >= _price(_food()) and _stock_amount("tavern","inn_business",_food())>0:
 				_at(npc,a,"tavern",{"type":"eat","remaining":15})
 			else:
 				a.reason = "Нет денег или еды; поиск доступной работы, без создания ресурсов"
@@ -272,12 +292,12 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 			if int(a.workMinutes)>=240 and int(a.lastPaidDay)!=_day():
 				_oblige(npc.employer,npc.account,int(npc.wage),"wage:"+npc.id+":"+str(_day()),npc.id,"wage","Оплата работы")
 		"eat":
-			var stock := _stock("tavern","inn_business","potato")
-			if stock!="" and int(state.stocks[stock])>0 and _pay(npc.account,"inn_business",_price("potato"),"meal:"+npc.id+":"+str(state.minute),npc.id,"Покупка еды"):
+			var stock := _stock("tavern","inn_business",_food())
+			if stock!="" and int(state.stocks[stock])>0 and _pay(npc.account,"inn_business",_price(_food()),"meal:"+npc.id+":"+str(state.minute),npc.id,"Покупка еды"):
 				state.stocks[stock]-=1
-				state.consumed.potato=int(state.consumed.get("potato",0))+1
+				state.consumed[_food()]=int(state.consumed.get(_food(),0))+1
 				a.hunger=mini(1000,int(a.hunger)+_rule("mealGain",650))
-				_event("eat",npc.id,a.place,"Поел: расход 1 картофеля")
+				_event("eat",npc.id,a.place,"Поел: расход 1 "+_food(),{"item":_food(),"amount":1,"price":_price(_food())})
 		"buy":
 			var h: Dictionary = definition.house
 			if state.owners.get(h.place,"")==h.seller and _available(npc.account)>=int(h.price) and _pay(npc.account,h.seller,int(h.price),"house:"+h.place,npc.id,"Покупка собственного дома"):
@@ -289,10 +309,11 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 		"pickup":
 			var pr: Dictionary = definition.production
 			var stock := _stock(pr.place,pr.owner,pr.output)
-			if stock!="" and int(state.stocks[stock])>=2 and not state.ledger.has("delivery:"+str(_day())) and 2*_weight(pr.output)<=float(npc.get("carryCapacity",10)):
-				state.stocks[stock]-=2
+			var amount:=_delivery_amount(npc)
+			if stock!="" and amount>0 and int(state.stocks[stock])>=amount and (_cooking() or not state.ledger.has("delivery:"+str(_day()))) and amount*_weight(pr.output)<=float(npc.get("carryCapacity",10)):
+				state.stocks[stock]-=amount
 				state.ledger.append("delivery:"+str(_day()))
-				a.cargo={"item":pr.output,"amount":2,"owner":pr.owner,"source":stock}
+				a.cargo={"item":pr.output,"amount":amount,"owner":pr.owner,"source":stock}
 				_at(npc,a,"tavern",{"type":"deliver","remaining":5})
 			else:
 				_event("plan_failed",npc.id,a.place,"Погрузка отменена: груз уже забрали, дневной заказ выполнен или превышен допустимый вес.")
@@ -363,6 +384,28 @@ func _produce(npc: Dictionary) -> void:
 	state.produced[p.output]=int(state.produced.get(p.output,0))+int(p.outputAmount)
 	_event("production",npc.id,p.place,"Переработка "+str(p.input)+" → "+str(p.output)+": расход сырья и "+str(p.minutes)+" минут труда")
 
+func _cook(npc: Dictionary, a: Dictionary) -> void:
+	if not _cooking() or npc.work!="tavern" or a.place!="tavern": return
+	var recipe: Dictionary=definition.cooking
+	var source:=_stock("tavern","inn_business",recipe.input)
+	var target:=_stock("tavern","inn_business",recipe.output)
+	if source=="" or target=="" or int(state.stocks[source])<int(recipe.inputAmount):
+		# No banked labour while ingredients are missing.
+		state.cookingMinutes=0
+		var key: String="kitchen-blocked:"+str(_day())
+		if not state.ledger.has(key):
+			state.ledger.append(key)
+			_event("blocked",npc.id,a.place,"Кухня ждёт доставленное сырьё: "+str(recipe.input))
+		return
+	state.cookingMinutes=int(state.get("cookingMinutes",0))+1
+	if int(state.cookingMinutes)<int(recipe.minutes): return
+	state.cookingMinutes=0
+	state.stocks[source]-=int(recipe.inputAmount)
+	state.stocks[target]+=int(recipe.outputAmount)
+	state.consumed[recipe.input]=int(state.consumed.get(recipe.input,0))+int(recipe.inputAmount)
+	state.produced[recipe.output]=int(state.produced.get(recipe.output,0))+int(recipe.outputAmount)
+	_event("cooking",npc.id,a.place,"Приготовлено "+str(int(recipe.outputAmount))+" "+str(recipe.output)+" из "+str(int(recipe.inputAmount))+" "+str(recipe.input)+" за "+str(int(recipe.minutes))+" минут труда",{"input":recipe.input,"output":recipe.output,"amount":recipe.outputAmount})
+
 func _available(account: String) -> int:
 	var reserved:=0
 	for debt in state.obligations:
@@ -408,6 +451,7 @@ func _event(type: String,actor: String,place: String,text: String,data: Dictiona
 		var a: Dictionary=state.agents[key]
 		if key==actor or (type!="decision" and place!="" and a.place==place and not a.action.get("type","") in ["travel","rest"]):
 			witnesses.append(key)
+	witnesses.sort()
 	var event_id := "event_"+str(int(state.nextEvent))
 	state.nextEvent+=1
 	state.events.append({"id":event_id,"minute":state.minute,"type":type,"actor":actor,"place":place,"text":text,"witnesses":witnesses,"data":data})

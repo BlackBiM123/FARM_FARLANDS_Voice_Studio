@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import JSZip from "jszip";
 import NeedsPanel from "./NeedsPanel.vue";
+import FoodChainPanel from "./FoodChainPanel.vue";
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { Play, Pause, Save, Download, Upload, Plus } from "lucide-vue-next";
 import type { NPC } from "../../shared/schema";
@@ -162,6 +163,7 @@ const cargoWeight = computed(() =>
     : 0,
 );
 const eventLabels: Record<string, string> = {
+  cooking: "Приготовление еды",
   plan_failed: "План изменился",
   obligation: "Начисление",
   decision: "Решение NPC",
@@ -1545,6 +1547,7 @@ onUnmounted(() => {
                 min="10"
             /></label>
           </div>
+          <FoodChainPanel v-model="draft" />
           <h3>Предложение жилья</h3>
           <div class="world-fields">
             <label
@@ -1575,6 +1578,12 @@ onUnmounted(() => {
         :running="!!report"
         :active="report?.definition.needs"
         :actor="inspect"
+      />
+      <FoodChainPanel
+        v-if="report"
+        :model-value="report.definition"
+        :state="report.state"
+        readonly
       />
       <div class="panel world-run-controls">
         <div class="world-toolbar">

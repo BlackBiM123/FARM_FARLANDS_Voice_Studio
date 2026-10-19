@@ -4,6 +4,7 @@ var failed: Array[String]=[]
 func _initialize() -> void:
 	var args=OS.get_cmdline_user_args()
 	var world: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(args[0]))
+	test_cooking(world)
 	test_needs(world)
 	var baseline=world.duplicate(true)
 	var routes=Core.new()
@@ -244,3 +245,47 @@ func test_needs(world: Dictionary) -> void:
 	check(restored.restore(JSON.parse_string(JSON.stringify(split.snapshot()))),"Настроенные потребности восстанавливаются из JSON")
 	restored.advance(60)
 	check(JSON.stringify(JSON.parse_string(JSON.stringify(straight.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(restored.state)),"",true),"Настройки потребностей сохраняются при продолжении")
+
+func kitchen_world(world: Dictionary) -> Dictionary:
+	var w=world.duplicate(true)
+	w.items.append({"id":"cooked_meal","name":"Блюдо","weight":0.3,"price":3})
+	w.stocks.append({"id":"kitchen_meals","place":"tavern","owner":"inn_business","item":"cooked_meal","amount":0})
+	w.cooking={"enabled":true,"input":"flour","output":"cooked_meal","inputAmount":1,"outputAmount":4,"minutes":30}
+	return w
+
+func test_cooking(world: Dictionary) -> void:
+	var configured=kitchen_world(world)
+	var core=Core.new()
+	core.start(configured,"kitchen")
+	core.advance(4320)
+	check(int(core.state.produced.get("cooked_meal",0))>0,"Кухня готовит из доставленной муки")
+	check(int(core.state.consumed.get("cooked_meal",0))>0,"Жители покупают и едят готовые блюда")
+	check(int(core.state.consumed.get("potato",0))==0,"Режим кухни не выдаёт сырой картофель за готовый обед")
+	var delivery_minute: int=-1
+	var cooking_minute: int=-1
+	for event in core.state.events:
+		if event.type=="delivery" and delivery_minute<0: delivery_minute=int(event.minute)
+		if event.type=="cooking" and cooking_minute<0: cooking_minute=int(event.minute)
+	check(delivery_minute>=0 and cooking_minute>=delivery_minute+29,"Первое блюдо требует доставки и времени труда")
+	conservation(core.snapshot())
+	var no_routes=configured.duplicate(true)
+	for edge in no_routes.routes: edge.open=false
+	var isolated=Core.new()
+	isolated.start(no_routes,"isolated-kitchen")
+	isolated.advance(2880)
+	check(int(isolated.state.produced.get("cooked_meal",0))==0,"Без доставки кухня не создаёт еду")
+	conservation(isolated.snapshot())
+	var no_cook=configured.duplicate(true)
+	for npc in no_cook.agents:
+		if npc.role=="innkeeper": npc.role="resident"
+	var unstaffed=Core.new()
+	unstaffed.start(no_cook,"unstaffed")
+	unstaffed.advance(2880)
+	check(int(unstaffed.state.produced.get("cooked_meal",0))==0,"Без труда повара блюда не появляются")
+	var split=Core.new()
+	split.start(configured,"kitchen")
+	split.advance(1440)
+	var restored=Core.new()
+	check(restored.restore(JSON.parse_string(JSON.stringify(split.snapshot()))),"Кухня восстанавливается из JSON")
+	restored.advance(2880)
+	check(JSON.stringify(JSON.parse_string(JSON.stringify(core.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(restored.state)),"",true),"Продолжение кухни совпадает с непрерывным расчётом")
