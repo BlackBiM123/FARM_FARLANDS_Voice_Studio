@@ -4,6 +4,7 @@ var failed: Array[String]=[]
 func _initialize() -> void:
 	var args=OS.get_cmdline_user_args()
 	var world: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(args[0]))
+	test_mechanics(world)
 	test_cooking(world)
 	test_needs(world)
 	var baseline=world.duplicate(true)
@@ -289,3 +290,72 @@ func test_cooking(world: Dictionary) -> void:
 	check(restored.restore(JSON.parse_string(JSON.stringify(split.snapshot()))),"Кухня восстанавливается из JSON")
 	restored.advance(2880)
 	check(JSON.stringify(JSON.parse_string(JSON.stringify(core.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(restored.state)),"",true),"Продолжение кухни совпадает с непрерывным расчётом")
+
+func mechanics_world(world: Dictionary) -> Dictionary:
+	var w=world.duplicate(true)
+	w.mechanics={"version":1,"modules":[{"id":"test_module","name":"Тест расширения","version":1,"enabled":true,"variables":[{"id":"load","name":"Тестовая нагрузка","scope":"npc","unit":"ед.","min":0,"max":100,"initial":0,"perMinute":1},{"id":"clock","name":"Счётчик мира","scope":"world","unit":"мин","min":0,"max":100000,"initial":0,"perMinute":1}],"actions":[{"id":"pause","name":"Тестовая пауза","variable":"load","when":"above","threshold":10,"priority":200,"minutes":5,"delta":-20,"place":"current"}]}]}
+	return w
+
+func test_mechanics(world: Dictionary) -> void:
+	var configured=mechanics_world(world)
+	var original=JSON.stringify(configured)
+	var core=Core.new()
+	core.start(configured,"mechanics")
+	core.advance(120)
+	check(core.state.events.any(func(e):return e.type=="mechanic"),"Описанное действие подключается без нового кода основного цикла")
+	check(int(core.state.mechanics.values["test_module:clock"].world)==120,"Показатель мира меняется один раз за минуту")
+	for value in core.state.mechanics.values["test_module:load"].values(): check(int(value)>=0 and int(value)<=100,"Границы дополнительных показателей соблюдаются")
+	check(JSON.stringify(configured)==original,"Модуль не переписывает авторские определения")
+	conservation(core.snapshot())
+	var single=configured.duplicate(true)
+	single.agents=[single.agents[0]]
+	var lone=Core.new()
+	lone.start(single,"single")
+	lone.advance(120)
+	check(lone.state.mechanics.values["test_module:clock"].world==core.state.mechanics.values["test_module:clock"].world,"Скорость показателя мира не зависит от числа NPC")
+	var split=Core.new()
+	split.start(configured,"mechanics")
+	split.advance(57)
+	var restored=Core.new()
+	check(restored.restore(JSON.parse_string(JSON.stringify(split.snapshot()))),"Состояние модуля восстанавливается из JSON")
+	restored.advance(63)
+	check(JSON.stringify(JSON.parse_string(JSON.stringify(core.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(restored.state)),"",true),"Прогон модуля и продолжение дают одинаковое состояние")
+	var bad=core.snapshot()
+	bad.state.mechanics.versions.test_module=2
+	var intact=JSON.stringify(restored.state,"",true)
+	check(not restored.restore(bad),"Несовместимая версия модуля отклоняется")
+	check(JSON.stringify(restored.state,"",true)==intact,"Отказ восстановления не меняет текущий запуск")
+	bad=core.snapshot()
+	bad.state.mechanics.values.erase("test_module:load")
+	check(not restored.restore(bad),"Нельзя молча сбросить пропавший показатель")
+	var disabled=configured.duplicate(true)
+	disabled.mechanics.modules[0].enabled=false
+	var off=Core.new()
+	off.start(disabled,"off")
+	off.advance(120)
+	check(off.state.mechanics.values.is_empty() and not off.state.events.any(func(e):return e.type=="mechanic"),"Выключенный модуль не влияет на расчёт")
+	var travel=configured.duplicate(true)
+	travel.mechanics.modules[0].variables[0].initial=100
+	travel.mechanics.modules[0].variables[0].perMinute=0
+	travel.mechanics.modules[0].actions[0].place="home"
+	var walker=Core.new()
+	walker.start(travel,"walk")
+	var npc: Dictionary=travel.agents[0]
+	var actor: Dictionary=walker.state.agents[npc.id]
+	actor.place=npc.work
+	walker._choose(npc,actor)
+	check(actor.action.type=="travel","Действие модуля дома требует реального путешествия")
+	walker.advance(12)
+	check(int(walker.state.mechanics.values["test_module:load"][npc.id])==100,"Эффект не возникает до завершения пути и действия")
+	var resumed=Core.new()
+	check(resumed.restore(JSON.parse_string(JSON.stringify(walker.snapshot()))),"Восстанавливается незавершённое действие модуля")
+	walker.advance(3)
+	resumed.advance(3)
+	check(int(walker.state.mechanics.values["test_module:load"][npc.id])==80,"Эффект применяется один раз после пяти минут действия")
+	check(JSON.stringify(JSON.parse_string(JSON.stringify(walker.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(resumed.state)),"",true),"Продолжение незавершённого действия детерминировано")
+	var legacy=Core.new()
+	legacy.start(world,"old")
+	var legacy_save=legacy.snapshot()
+	legacy_save.state.erase("mechanics")
+	var migrated=Core.new()
+	check(migrated.restore(legacy_save) and migrated.state.mechanics.versions.core_needs==1,"Старое сохранение получает системный адаптер без сброса сытости")

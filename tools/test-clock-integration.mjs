@@ -34,6 +34,10 @@ try {
     join(temp, "addons/farlands_world/world_core.gd"),
   );
   cpSync(
+    "simulation/mechanics.gd",
+    join(temp, "addons/farlands_world/mechanics.gd"),
+  );
+  cpSync(
     "../../work/farm-and-farlands-audit/autoload/game_clock.gd",
     join(temp, "clock.gd"),
   );

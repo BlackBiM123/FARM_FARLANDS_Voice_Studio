@@ -1,5 +1,13 @@
 import { z } from "zod";
 import { needsSchema } from "./needs.js";
+import {
+  mechanicsSchema,
+  mechanicsStateSchema,
+  mechanicChangeSchema,
+  mechanicsSnapshotError,
+  type MechanicsState,
+  type MechanicChange,
+} from "./mechanics.js";
 const id = z.string().regex(/^[a-z0-9_-]{1,60}$/),
   num = z.number().int().min(0).max(10000000),
   name = z.string().min(1).max(100);
@@ -85,6 +93,7 @@ export const worldSchema = z
       outputAmount: z.number().int().min(1).max(100),
       minutes: z.number().int().min(10).max(1440),
     }),
+    mechanics: mechanicsSchema.optional(),
     cooking: z
       .object({
         enabled: z.boolean(),
@@ -175,6 +184,7 @@ export type WorldEvent = {
   data: Record<string, any>;
 };
 export type WorldAgent = {
+  mechanicTrace?: MechanicChange[];
   knownEventCount?: number;
   cargo?: { item: string; amount: number; owner: string; source: string };
   id: string;
@@ -193,6 +203,7 @@ export type WorldAgent = {
   ownsHouse: boolean;
 };
 export type WorldState = {
+  mechanics?: MechanicsState;
   journalMode?: "external";
   obligations?: {
     id: string;
@@ -229,6 +240,7 @@ export type WorldState = {
 };
 const action = z.record(z.string(), z.unknown());
 const agentState = z.object({
+  mechanicTrace: z.array(mechanicChangeSchema).max(12).optional(),
   knownEventCount: num.optional(),
   id,
   place: id,
@@ -251,6 +263,7 @@ const agentState = z.object({
   cargo: z.object({ item: id, amount: num, owner: id, source: id }).optional(),
 });
 const stateSchema = z.object({
+  mechanics: mechanicsStateSchema.optional(),
   journalMode: z.literal("external").optional(),
   obligations: z
     .array(
@@ -313,6 +326,7 @@ export const reportSchema = z
         z.literal(4),
         z.literal(5),
         z.literal(6),
+        z.literal(7),
       ])
       .optional(),
     coreVersion: z.literal("farlands-core-1"),
@@ -384,6 +398,7 @@ export const reportSchema = z
           "work",
           "travel",
           "eat",
+          "mechanic",
           "buy",
           "pickup",
           "import_pickup",
@@ -413,6 +428,33 @@ export const reportSchema = z
           ))
       )
         fail("Некорректный маршрут снимка");
+    }
+    const mechanicsError = mechanicsSnapshotError(
+      r.definition.mechanics,
+      r.state.mechanics,
+      Object.keys(r.state.agents),
+      !!r.definition.cooking?.enabled,
+    );
+    if (mechanicsError) fail(mechanicsError);
+    for (const actor of Object.values(r.state.agents)) {
+      const pending = (
+        actor.action.type === "travel" ? actor.action.after : actor.action
+      ) as Record<string, any> | undefined;
+      if (pending?.type === "mechanic") {
+        const module = r.definition.mechanics?.modules.find(
+          (m) => m.enabled && m.id === pending.module,
+        );
+        const action = module?.actions.find(
+          (a) => a.id === pending.mechanicAction,
+        );
+        if (
+          !action ||
+          typeof pending.remaining !== "number" ||
+          pending.remaining < 1 ||
+          pending.remaining > action.minutes
+        )
+          fail("Неизвестное действие механики в снимке");
+      }
     }
     const expectedMoney = r.definition.accounts.reduce(
       (sum, a) => sum + a.balance,

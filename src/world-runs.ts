@@ -2,7 +2,7 @@ import type { WorldDefinition, WorldState } from "../shared/world";
 import { reportSchema } from "../shared/world";
 export type WorldReport = {
   version: 1;
-  rulesVersion?: 2 | 3 | 4 | 5 | 6;
+  rulesVersion?: 2 | 3 | 4 | 5 | 6 | 7;
   journalId?: string;
   archive?: import("../shared/world").WorldEvent[];
   journal?: {

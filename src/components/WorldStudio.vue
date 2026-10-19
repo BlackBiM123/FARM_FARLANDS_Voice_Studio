@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import JSZip from "jszip";
 import NeedsPanel from "./NeedsPanel.vue";
+import MechanicsPanel from "./MechanicsPanel.vue";
 import FoodChainPanel from "./FoodChainPanel.vue";
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { Play, Pause, Save, Download, Upload, Plus } from "lucide-vue-next";
@@ -163,6 +164,7 @@ const cargoWeight = computed(() =>
     : 0,
 );
 const eventLabels: Record<string, string> = {
+  mechanic: "Действие модуля",
   cooking: "Приготовление еды",
   plan_failed: "План изменился",
   obligation: "Начисление",
@@ -311,7 +313,7 @@ async function exportGodotWorld() {
         2,
       ),
     );
-    for (const file of ["world_core.gd"]) {
+    for (const file of ["world_core.gd", "mechanics.gd"]) {
       const r = await fetch("/simulation/source/" + file);
       if (!r.ok) throw Error("Нет исходника ядра");
       zip.file("addons/farlands_world/" + file, await r.text());
@@ -726,7 +728,7 @@ async function restoreRun(value: WorldReport) {
   error.value = "";
   notice.value = "";
   try {
-    if (value.rulesVersion !== 6) {
+    if ((value.rulesVersion ?? 0) < 6) {
       value = JSON.parse(JSON.stringify(value)) as WorldReport;
       const canonical = (id: string) =>
         id.replace(/^(event_[1-9][0-9]*)\.0$/, "$1");
@@ -772,7 +774,7 @@ async function restoreRun(value: WorldReport) {
     const { archive, journal, ...compact } = value;
     await applyReport(await command("restore", { report: compact }));
     notice.value =
-      value.rulesVersion === 6
+      (value.rulesVersion ?? 0) >= 6
         ? "Запуск восстановлен. Авторские анкеты не менялись."
         : "Снимок восстановлен с переносом журнала в отдельный архив. Старые долги задним числом не создаются.";
   } catch (e) {
@@ -1571,6 +1573,13 @@ onUnmounted(() => {
         ></template></div
     ></template>
     <template v-else>
+      <MechanicsPanel
+        v-model="draft.mechanics"
+        :active="report?.definition.mechanics"
+        :state="report?.state"
+        :actor="inspect"
+        :actor-name="inspect ? agentName(inspect.id) : ''"
+      />
       <NeedsPanel
         v-model="draft.needs"
         v-model:selected="selectedAgent"

@@ -1,10 +1,13 @@
 extends RefCounted
 ## Единое ядро: Godot Web, headless и игра используют этот файл без второй реализации.
+const Mechanics=preload("mechanics.gd")
 const VERSION := "farlands-core-1"
 var definition: Dictionary = {}
 var state: Dictionary = {}
 var error := ""
 var path_cache: Dictionary={}
+var mechanic_bindings: Array=[]
+var mechanic_modules: Array=[]
 ## Адаптер обязан сохранить события отдельно. Без него остаётся совместимый полный журнал.
 var event_sink: Callable
 
@@ -30,8 +33,14 @@ func _food() -> String:
 
 func start(world: Dictionary, content_hash: String) -> Dictionary:
 	error = ""
+	var mechanics_error:=Mechanics.definition_error(world)
+	if mechanics_error!="":
+		error=mechanics_error
+		return {}
 	definition = world.duplicate(true)
 	path_cache.clear()
+	mechanic_bindings=Mechanics.builtins(definition)
+	mechanic_modules=Mechanics.modules(definition)
 	state = {"version":1,"coreVersion":VERSION,"contentHash":content_hash,"minute":360,"seed":int(world.seed),"rng":maxi(1,int(world.seed)),"agents":{},"accounts":{},"stocks":{},"owners":{},"events":[],"nextEvent":1,"productionMinutes":0,"ledger":[],"protectedFacts":world.protectedFacts.duplicate(),"baselineMoney":0,"baselineItems":{},"produced":{},"consumed":{}}
 	for account in world.accounts:
 		state.accounts[account.id] = int(account.balance)
@@ -45,7 +54,8 @@ func start(world: Dictionary, content_hash: String) -> Dictionary:
 	state.obligations=[]
 	if event_sink.is_valid(): state.journalMode="external"
 	for npc in world.agents:
-		state.agents[npc.id] = {"id":npc.id,"place":npc.home,"energy":_rule("initialEnergy",900),"hunger":_rule("initialFullness",900),"action":{},"reason":"Начало дня","choices":[],"goal":"Собственный дом" if npc.goalHouse else "Работа и спокойная жизнь","knowledge":[],"relationships":{},"workMinutes":0,"lastPaidDay":-1,"home":npc.home,"ownsHouse":false}
+		state.agents[npc.id] = {"id":npc.id,"place":npc.home,"energy":0,"hunger":0,"action":{},"reason":"Начало дня","choices":[],"goal":"Собственный дом" if npc.goalHouse else "Работа и спокойная жизнь","knowledge":[],"relationships":{},"workMinutes":0,"lastPaidDay":-1,"home":npc.home,"ownsHouse":false}
+	Mechanics.initialize(definition,state,true)
 	_event("start","","","Начало отдельного тестового мира. Авторские анкеты не изменяются.")
 	if event_sink.is_valid():
 		for actor in state.agents.values(): actor.knownEventCount=int(actor.get("knownEventCount",0))
@@ -121,12 +131,20 @@ func restore(report: Dictionary) -> bool:
 			error="Некорректное обязательство снимка"
 			return false
 		debt_ids[debt.id]=true
+	var mechanics_error:=Mechanics.definition_error(report.definition)
+	if mechanics_error=="": mechanics_error=Mechanics.validate(report.definition,candidate)
+	if mechanics_error!="":
+		error=mechanics_error
+		return false
 	definition = report.definition.duplicate(true)
 	path_cache.clear()
+	mechanic_bindings=Mechanics.builtins(definition)
+	mechanic_modules=Mechanics.modules(definition)
 	state = candidate.duplicate(true)
 	state.minute=int(state.minute)
 	state.nextEvent=int(state.nextEvent)
 	state.rng=int(state.rng)
+	Mechanics.initialize(definition,state,false)
 	if not state.has("obligations"): state.obligations=[]
 	if event_sink.is_valid():
 		state.journalMode="external"
@@ -137,7 +155,7 @@ func restore(report: Dictionary) -> bool:
 	return true
 
 func snapshot() -> Dictionary:
-	return {"version":1,"rulesVersion":6,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
+	return {"version":1,"rulesVersion":7,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
 
 func advance(minutes: int) -> Dictionary:
 	error = ""
@@ -160,6 +178,7 @@ func advance(minutes: int) -> Dictionary:
 		if clock == 360:
 			_dawn()
 		if clock%60==0: _settle_obligations()
+		Mechanics.tick_world(definition,state,mechanic_modules)
 		for npc in definition.agents:
 			_tick(npc, state.agents[npc.id])
 	return snapshot()
@@ -174,20 +193,13 @@ func _dawn() -> void:
 	_event("day","","","Начался день "+str(_day()+1))
 
 func _tick(npc: Dictionary, a: Dictionary) -> void:
-	a.hunger = maxi(0,int(a.hunger)-_rule("fullnessDrain",1))
+	Mechanics.tick_actor(definition,state,npc,a,mechanic_bindings,mechanic_modules)
 	var action: Dictionary = a.action
 	if not action.is_empty():
-		if action.type == "rest":
-			a.energy = mini(1000,int(a.energy)+_rule("restGain",5))
-		else:
-			a.energy = maxi(0,int(a.energy)-_rule("energyDrain",1))
 		action.remaining = int(action.remaining)-1
 		if action.type == "work":
 			a.workMinutes += 1
-			if npc.role == "farmer":
-				_produce(npc)
-			if npc.role == "innkeeper":
-				_cook(npc,a)
+			Mechanics.on_work(self,npc,a)
 		if action.type == "travel":
 			action.elapsed = int(action.elapsed)+1
 			var legs: Array = action.legs
@@ -205,8 +217,9 @@ func _tick(npc: Dictionary, a: Dictionary) -> void:
 func _choose(npc: Dictionary, a: Dictionary) -> void:
 	var clock := int(state.minute)%1440
 	var work_score := 80 if clock >= 480 and clock < 960 and npc.role!="resident" else -1
-	var sleep_score := _rule("nightPriority",100) if clock < 360 or clock >= 1320 else (_rule("restPriority",130) if int(a.energy)<_rule("restThreshold",150) else -1)
-	var eat_score := _rule("eatPriority",120) if int(a.hunger)<_rule("eatThreshold",300) else -1
+	var need_scores: Dictionary=Mechanics.need_scores(definition,a,clock)
+	var sleep_score: int=need_scores.rest
+	var eat_score: int=need_scores.eat
 	var house: Dictionary = definition.house
 	var buy_score := 95 if npc.goalHouse and not a.ownsHouse and _available(npc.account)>=int(house.price) and state.owners.get(house.place,"")==house.seller else -1
 	var evening := clock>=1020 and clock<1260
@@ -228,6 +241,11 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	a.choices = [{"action":"Отдых","score":sleep_score,"reason":"Энергия %d/1000, порог %d; ночь 22:00–06:00. %s" % [int(a.energy),_rule("restThreshold",150),"Дом доступен" if _reachable(a.place,a.home) else "Нет пути домой"]},{"action":"Поесть","score":eat_score,"reason":"Сытость %d/1000, порог %d. %s" % [int(a.hunger),_rule("eatThreshold",300),"Нет пути в таверну" if not _reachable(a.place,"tavern") else ("Нет еды в таверне" if _stock_amount("tavern","inn_business",_food())==0 else ("Не хватает денег на еду" if int(state.accounts[npc.account])<_price(_food()) else "Еда и деньги доступны"))]},{"action":"Купить дом","score":buy_score,"reason":"Достаточно собственных средств и есть продавец"},{"action":"Работа","score":work_score,"reason":"Обязательство 08:00–16:00"},{"action":"Перевозка","score":delivery_score,"reason":"Есть груз фермы; оплачивает таверна"},{"action":"Общение","score":social_score,"reason":"Свободный вечер и согласие второго участника"},{"action":"Свободное время","score":0,"reason":"Нет более важных доступных дел"}]
 	var best: Dictionary = a.choices[0]
 	a.choices.append({"action":"Пополнить запас еды","score":import_score,"reason":"Таверне нужна еда; есть продавец, деньги и маршрут через причал"})
+	for choice in Mechanics.choices(definition,state,npc,a,mechanic_modules):
+		if not _reachable(a.place,str(choice._place)):
+			choice.score=-1
+			choice.reason+=". Нет открытого маршрута"
+		a.choices.append(choice)
 	for choice in a.choices:
 		if int(choice.score)>int(best.score):
 			best=choice
@@ -239,6 +257,9 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 		if option.action!=best.action and alternatives.size()<2:
 			alternatives.append({"action":option.action,"score":option.score})
 	_event("decision",npc.id,a.place,"Выбрано: "+best.action+" · "+best.reason,{"score":best.score,"alternatives":alternatives,"goal":a.goal})
+	if best.has("_module"):
+		_at(npc,a,str(best._place),{"type":"mechanic","module":best._module,"mechanicAction":best._action,"remaining":best._minutes})
+		return
 	match best.action:
 		"Отдых": _at(npc,a,a.home,{"type":"rest","remaining":60})
 		"Поесть":
@@ -275,6 +296,9 @@ func _at(npc: Dictionary, a: Dictionary, place: String, next: Dictionary) -> voi
 
 func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 	match action.type:
+		"mechanic":
+			var result: Dictionary=Mechanics.finish(definition,state,npc,action)
+			_event("mechanic",npc.id,a.place,"Выполнено действие модуля: "+str(action.mechanicAction),result)
 		"import_pickup":
 			var source := _stock("pier","outside","potato")
 			if source!="" and int(state.stocks[source])>=10 and not _cargo_in_transit("potato") and 10*_weight("potato")<=float(npc.get("carryCapacity",10)):
@@ -296,7 +320,7 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 			if stock!="" and int(state.stocks[stock])>0 and _pay(npc.account,"inn_business",_price(_food()),"meal:"+npc.id+":"+str(state.minute),npc.id,"Покупка еды"):
 				state.stocks[stock]-=1
 				state.consumed[_food()]=int(state.consumed.get(_food(),0))+1
-				a.hunger=mini(1000,int(a.hunger)+_rule("mealGain",650))
+				Mechanics.binding_effect(definition,state,a,"core_needs:fullness",_rule("mealGain",650),"meal")
 				_event("eat",npc.id,a.place,"Поел: расход 1 "+_food(),{"item":_food(),"amount":1,"price":_price(_food())})
 		"buy":
 			var h: Dictionary = definition.house

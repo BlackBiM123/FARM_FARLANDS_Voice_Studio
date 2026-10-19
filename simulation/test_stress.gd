@@ -15,6 +15,7 @@ func _initialize() -> void:
 			actor.goalHouse=false
 			world.agents.append(actor)
 			world.accounts.append({"id":actor.id,"name":actor.name,"balance":70})
+		world.mechanics={"version":1,"modules":[{"id":"stress_module","name":"Тест подключения","version":1,"enabled":true,"variables":[{"id":"load","name":"Нагрузка","scope":"npc","unit":"ед.","min":0,"max":100,"initial":0,"perMinute":1},{"id":"clock","name":"Время","scope":"world","unit":"мин","min":0,"max":100000,"initial":0,"perMinute":1}],"actions":[{"id":"pause","name":"Тестовая пауза","variable":"load","when":"above","threshold":50,"priority":150,"minutes":5,"delta":-80,"place":"current"}]}]}
 		var started=Time.get_ticks_msec()
 		var a=Core.new()
 		var history:Array=[]
@@ -25,6 +26,9 @@ func _initialize() -> void:
 		var run_error=a.error
 		if run_error!="" and not run_error.contains("размер снимка"):
 			fail(run_error)
+			return
+		if int(a.state.mechanics.values["stress_module:clock"].world)!=duration:
+			fail("Мировой показатель зависит от числа NPC")
 			return
 		var report=a.snapshot()
 		var size=JSON.stringify(report).to_utf8_buffer().size()
