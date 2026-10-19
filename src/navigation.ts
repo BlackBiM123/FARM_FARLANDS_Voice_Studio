@@ -53,7 +53,7 @@ export function installNavigation() {
     if (url.origin !== location.origin || url.pathname.startsWith("/api/"))
       return;
     if (
-      !/^\/(studio|casting|characters|families|dialogue|stories|settings|world|economy|simulation|guide)(\/|$)/.test(
+      !/^\/(studio|casting|characters|families|dialogue|stories|settings|world|economy|simulation|guide|experiments)(\/|$)/.test(
         url.pathname,
       )
     )

@@ -32,6 +32,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/experiments", "destination": "/index.html" },
     {
       "source": "/studio/:path*",
       "destination": "/index.html"

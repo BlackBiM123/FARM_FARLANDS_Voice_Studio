@@ -46,6 +46,11 @@ const GuidePage = defineAsyncComponent({
   loadingComponent: PageLoader,
   delay: 0,
 });
+const ExperimentLab = defineAsyncComponent({
+  loader: () => import("./components/ExperimentLab.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+});
 const StoryPage = defineAsyncComponent({
   loader: () => import("./components/StoryPage.vue"),
   loadingComponent: PageLoader,
@@ -94,25 +99,29 @@ const initialDialogueNpc = computed(
     undefined,
 );
 const characterMode = computed(() =>
-  characterHash.value.split("?")[0] === "#/guide"
-    ? "guide"
-    : /^#\/(world|economy|simulation)(\/|$)/.test(characterHash.value)
-      ? "world"
-      : characterHash.value === "#/settings"
-        ? "settings"
-        : characterHash.value.startsWith("#/dialogue")
-          ? "dialogue"
-          : characterHash.value.startsWith("#/stories")
-            ? "stories"
-            : characterHash.value.startsWith("#/families")
-              ? "families"
-              : characterHash.value === "#/characters/new"
-                ? "new"
-                : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
-                  ? "edit"
-                  : characterHash.value === "#/characters"
-                    ? "catalog"
-                    : "studio",
+  characterHash.value.split("?")[0] === "#/experiments"
+    ? "experiments"
+    : characterHash.value.split("?")[0] === "#/guide"
+      ? "guide"
+      : /^#\/(world|economy|simulation)(\/|$)/.test(characterHash.value)
+        ? "world"
+        : characterHash.value === "#/settings"
+          ? "settings"
+          : characterHash.value.startsWith("#/dialogue")
+            ? "dialogue"
+            : characterHash.value.startsWith("#/stories")
+              ? "stories"
+              : characterHash.value.startsWith("#/families")
+                ? "families"
+                : characterHash.value === "#/characters/new"
+                  ? "new"
+                  : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(
+                        characterHash.value,
+                      )
+                    ? "edit"
+                    : characterHash.value === "#/characters"
+                      ? "catalog"
+                      : "studio",
 );
 const editingCharacter = computed(() =>
   npcs.value.find(
@@ -1303,6 +1312,11 @@ function pauseOthers(e: Event) {
       >
         Симуляция</button
       ><button
+        :class="{ chosen: characterMode === 'experiments' }"
+        @click="navigate('/experiments')"
+      >
+        Проверки</button
+      ><button
         :class="{ chosen: characterMode === 'guide' }"
         @click="navigate('/guide')"
       >
@@ -1359,7 +1373,12 @@ function pauseOthers(e: Event) {
         <p>{{ gameStyleRule }}</p>
       </details>
     </section>
-    <GuidePage v-if="characterMode === 'guide'" />
+    <ExperimentLab
+      v-if="characterMode === 'experiments' && projectLoaded"
+      :world="world"
+      :npcs="npcs"
+    />
+    <GuidePage v-else-if="characterMode === 'guide'" />
     <section v-else-if="characterMode === 'settings'" class="settings-page">
       <div class="panel">
         <h2>Настройки</h2>
