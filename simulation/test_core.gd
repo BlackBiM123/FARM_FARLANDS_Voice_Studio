@@ -303,6 +303,8 @@ func test_mechanics(world: Dictionary) -> void:
 	core.start(configured,"mechanics")
 	core.advance(120)
 	check(core.state.events.any(func(e):return e.type=="mechanic"),"Описанное действие подключается без нового кода основного цикла")
+	for actor in core.state.agents.values():
+		for choice in actor.choices: check(choice.size()==3,"Снимок выбора не содержит внутренних полей планирования")
 	check(int(core.state.mechanics.values["test_module:clock"].world)==120,"Показатель мира меняется один раз за минуту")
 	for value in core.state.mechanics.values["test_module:load"].values(): check(int(value)>=0 and int(value)<=100,"Границы дополнительных показателей соблюдаются")
 	check(JSON.stringify(configured)==original,"Модуль не переписывает авторские определения")

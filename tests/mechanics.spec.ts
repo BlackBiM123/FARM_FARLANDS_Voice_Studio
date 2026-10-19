@@ -1,4 +1,7 @@
 import { test, expect } from "@playwright/test";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { projectSchema } from "../shared/schema";
 import { createWorld } from "../src/world-defaults";
 import { parseReport, checkWorld } from "../src/world-runs";
@@ -117,6 +120,32 @@ test("module descriptions drive the real core and restore without changing autho
   const resumed = await download();
   expect(resumed.state).toEqual(straight.state);
   expect(resumed.archive).toEqual(straight.archive);
+  if (process.env.GODOT) {
+    const dir = resolve("test-results/mechanics-native");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(dir + "/world.json", JSON.stringify(straight.definition));
+    const run = spawnSync(
+      process.env.GODOT,
+      [
+        "--headless",
+        "--path",
+        resolve("simulation"),
+        "--script",
+        "run.gd",
+        "--",
+        dir + "/world.json",
+        dir + "/report.json",
+        "120",
+        straight.contentHash,
+      ],
+      { encoding: "utf8", timeout: 30000 },
+    );
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    const native = JSON.parse(readFileSync(dir + "/report.json", "utf8"));
+    expect(native.state).toEqual(resumed.state);
+    expect(native.archive).toEqual(resumed.archive);
+  }
+
   const invalid = structuredClone(straight);
   invalid.state.mechanics!.versions.module_1 = 2;
   await restore(invalid);

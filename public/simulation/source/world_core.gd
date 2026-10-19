@@ -249,6 +249,9 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	for choice in a.choices:
 		if int(choice.score)>int(best.score):
 			best=choice
+	best=best.duplicate(true)
+	for choice in a.choices:
+		for key in ["_module","_action","_place","_minutes"]: choice.erase(key)
 	a.reason = best.reason
 	var alternatives: Array=[]
 	var ranked: Array=a.choices.duplicate()
