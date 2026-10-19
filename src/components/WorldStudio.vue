@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import JSZip from "jszip";
+import AgentDecision from "./AgentDecision.vue";
 import NeedsPanel from "./NeedsPanel.vue";
 import MechanicsPanel from "./MechanicsPanel.vue";
 import FoodChainPanel from "./FoodChainPanel.vue";
@@ -131,6 +132,16 @@ const visibleEvents = computed(() =>
     .slice(-100)
     .reverse(),
 );
+const inspectedDecision = computed(() => {
+  // Read the full archive, not the filtered/limited journal panel.
+  if (!report.value || !inspect.value) return undefined;
+  for (let i = journalEvents.length - 1; i >= 0; i--) {
+    const event = journalEvents[i]!;
+    if (event.type === "decision" && event.actor === inspect.value.id)
+      return event;
+  }
+  return undefined;
+});
 const checks = computed(() => (report.value ? checkWorld(report.value) : [])),
   valid = computed(() => worldSchema.safeParse(draft.value));
 const alerts = computed(() => {
@@ -1890,7 +1901,12 @@ onUnmounted(() => {
                 }}</small
               >
             </div>
-            <p><strong>Почему:</strong> {{ inspect.reason }}</p>
+            <AgentDecision
+              :actor="inspect"
+              :decision="inspectedDecision"
+              :minute="report.state.minute"
+              :place-name="placeName"
+            />
             <p v-if="inspect.action.remaining">
               <strong>До завершения:</strong>
               {{ inspect.action.remaining }} мин.
@@ -1945,15 +1961,6 @@ onUnmounted(() => {
                 ]
               }}
             </p>
-            <details>
-              <summary>Оценки действий</summary>
-              <p v-for="c in inspect.choices" :key="c.action">
-                <strong
-                  >{{ c.score < 0 ? "Недоступно" : c.score }} ·
-                  {{ c.action }}</strong
-                ><br />{{ c.reason }}
-              </p>
-            </details>
             <details>
               <summary>Знания и отношения</summary>
               <p>

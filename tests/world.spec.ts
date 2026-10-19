@@ -208,6 +208,16 @@ test("world editors and the real Godot Web core preserve lore and match headless
     chunks: Buffer[] = [];
   for await (const chunk of stream!) chunks.push(chunk);
   const report = JSON.parse(Buffer.concat(chunks).toString()) as WorldReport;
+  const explanation = page.getByRole("region", {
+    name: "Объяснение решения NPC",
+  });
+  await expect(explanation).toBeVisible();
+  await expect(explanation).toContainText("После завершения");
+  await expect(explanation).not.toContainText("Первое решение ещё не принято");
+  await expect(explanation).toContainText("Это не непрерывный прогноз");
+  await explanation.getByText(/Что было недоступно/).click();
+  await expect(explanation.locator("details[open] li").first()).toBeVisible();
+  await expect(explanation).not.toContainText("undefined");
   expect(checkWorld(report)).toEqual([]);
   expect(
     (report.archive ?? report.state.events).some((e) => e.type === "house"),

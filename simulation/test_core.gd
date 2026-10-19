@@ -7,6 +7,7 @@ func _initialize() -> void:
 	test_mechanics(world)
 	test_cooking(world)
 	test_needs(world)
+	test_scarcity_decisions(world)
 	var baseline=world.duplicate(true)
 	var routes=Core.new()
 	routes.start(world,"routes")
@@ -218,6 +219,46 @@ func conservation(report: Dictionary) -> void:
 		for npc_id in s.agents:
 			if s.agents[npc_id].knowledge.has(event.id):
 				check(event.witnesses.has(npc_id),"Знание только у свидетеля/участника")
+
+func test_scarcity_decisions(world: Dictionary) -> void:
+	# Isolated fixtures use the real core. No production definition is changed.
+	for obstacle in ["food", "money", "route"]:
+		var w=world.duplicate(true)
+		w.needs={"initialEnergy":900,"initialFullness":100,"fullnessDrain":0,"energyDrain":0,"restGain":1,"mealGain":400,"eatThreshold":300,"restThreshold":100,"eatPriority":190,"restPriority":180,"nightPriority":90}
+		if obstacle=="food":
+			for stock in w.stocks:
+				if stock.place=="tavern" and stock.item=="potato": stock.amount=0
+		if obstacle=="money":
+			for account in w.accounts:
+				if account.id==w.agents[0].account: account.balance=0
+		if obstacle=="route":
+			w.agents[0].home="farm"
+			for edge in w.routes: edge.open=false
+		var sim=Core.new()
+		sim.start(w,"obstacle-"+obstacle)
+		sim.advance(1)
+		var choice=sim.state.agents[w.agents[0].id].choices.filter(func(c):return c.action=="Поесть")[0]
+		var expected={"food":"Нет еды", "money":"Не хватает денег", "route":"Нет пути"}[obstacle]
+		check(choice.score==-1 and expected in choice.reason,"Недоступная еда объясняет препятствие: "+obstacle)
+		conservation(sim.snapshot())
+	var last=world.duplicate(true)
+	last.needs={"initialEnergy":900,"initialFullness":100,"fullnessDrain":0,"energyDrain":0,"restGain":1,"mealGain":400,"eatThreshold":300,"restThreshold":100,"eatPriority":190,"restPriority":180,"nightPriority":90}
+	for npc in last.agents:
+		npc.home="tavern"
+		npc.role="resident"
+	for stock in last.stocks:
+		stock.amount=1 if stock.id=="food_inn" else 0
+	var sim=Core.new()
+	sim.start(last,"last-meal")
+	sim.advance(5)
+	var restored=Core.new()
+	check(restored.restore(JSON.parse_string(JSON.stringify(sim.snapshot()))),"Снимок конкуренции за последнюю порцию принят")
+	sim.advance(30)
+	restored.advance(30)
+	check(int(sim.state.consumed.get("potato",0))==1,"Последняя порция съедена ровно один раз")
+	check(sim.state.agents.values().filter(func(a):return a.hunger>100).size()==1,"Одна порция восстанавливает сытость только одному NPC")
+	check(JSON.stringify(JSON.parse_string(JSON.stringify(sim.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(restored.state)),"",true),"Гонка за едой одинакова после восстановления")
+	conservation(sim.snapshot())
 
 func test_needs(world: Dictionary) -> void:
 	var configured=world.duplicate(true)
