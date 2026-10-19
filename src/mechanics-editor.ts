@@ -45,7 +45,7 @@ export function addMechanic(
             variable: "test_load",
             when: "above",
             threshold: 30,
-            priority: 160,
+            priority: 110,
             minutes: 5,
             delta: -50,
             place: "current",

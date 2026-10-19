@@ -338,6 +338,7 @@ func mechanics_world(world: Dictionary) -> Dictionary:
 	return w
 
 func test_mechanics(world: Dictionary) -> void:
+	test_module_competition(world)
 	var configured=mechanics_world(world)
 	var original=JSON.stringify(configured)
 	var core=Core.new()
@@ -402,3 +403,42 @@ func test_mechanics(world: Dictionary) -> void:
 	legacy_save.state.erase("mechanics")
 	var migrated=Core.new()
 	check(migrated.restore(legacy_save) and migrated.state.mechanics.versions.core_needs==1,"Старое сохранение получает системный адаптер без сброса сытости")
+
+func test_module_competition(world: Dictionary) -> void:
+	for need in ["eat", "rest"]:
+		var w=mechanics_world(world)
+		w.mechanics.modules[0].variables[0].initial=100
+		w.mechanics.modules[0].actions[0].priority=110
+		var sim=Core.new()
+		sim.start(w,"competition")
+		var npc: Dictionary=w.agents[0]
+		var actor: Dictionary=sim.state.agents[npc.id]
+		actor.place="tavern"
+		actor.energy=50 if need=="rest" else 900
+		actor.hunger=50 if need=="eat" else 900
+		sim._choose(npc,actor)
+		var action: Dictionary=actor.action.get("after",actor.action)
+		check(action.type==need,"Базовая потребность выигрывает у менее важного модуля: "+need)
+		actor.energy=900
+		actor.hunger=900
+		sim._choose(npc,actor)
+		check(actor.action.type=="mechanic","При сытости и энергии выбирается накопленная нагрузка")
+		var before: int=sim.state.mechanics.values["test_module:load"][npc.id]
+		sim.advance(2)
+		check(int(sim.state.mechanics.values["test_module:load"][npc.id])>=before,"Во время паузы дрейф продолжается, эффект ждёт завершения")
+		var saved=JSON.parse_string(JSON.stringify(sim.snapshot()))
+		var disabled=w.duplicate(true)
+		disabled.mechanics.modules[0].enabled=false
+		var next_run=Core.new()
+		next_run.start(disabled,"disabled")
+		next_run.advance(10)
+		check(not next_run.state.mechanics.versions.has("test_module"),"Отключение удаляет модуль из нового запуска")
+		check(next_run.restore(saved),"Сохранение включённого модуля восстанавливает собственные определения после отключения в новом мире")
+		sim.advance(8)
+		next_run.advance(8)
+		check(JSON.stringify(JSON.parse_string(JSON.stringify(sim.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(next_run.state)),"",true),"Отключение черновика не меняет продолжение старого запуска")
+		var bad=saved.duplicate(true)
+		bad.definition.mechanics.modules[0].enabled=false
+		var intact=JSON.stringify(next_run.state,"",true)
+		check(not next_run.restore(bad),"Снимок со выключенным определением и живым состоянием модуля отклоняется")
+		check(JSON.stringify(next_run.state,"",true)==intact,"Ошибка несовместимого отключения атомарна")

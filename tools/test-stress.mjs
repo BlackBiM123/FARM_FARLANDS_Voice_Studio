@@ -19,11 +19,13 @@ try {
     { reportSchema } = await import(
       pathToFileURL(join(dir, "schema.mjs")).href
     );
-  const world = createWorld([
-    { id: "npc_theo_hartley", name: "Тео" },
-    { id: "npc_start_farm_martin_001", name: "Мартин" },
-    { id: "npc_start_tavern_gideon_002", name: "Гидеон" },
-  ]);
+  const world = process.env.WORLD_DEFINITION_PATH
+    ? JSON.parse(readFileSync(process.env.WORLD_DEFINITION_PATH, "utf8"))
+    : createWorld([
+        { id: "npc_theo_hartley", name: "Тео" },
+        { id: "npc_start_farm_martin_001", name: "Мартин" },
+        { id: "npc_start_tavern_gideon_002", name: "Гидеон" },
+      ]);
   writeFileSync(join(dir, "world.json"), JSON.stringify(world));
   const result = spawnSync(
     process.env.GODOT || "godot",
@@ -49,6 +51,24 @@ try {
     );
     if (Object.keys(parsed.state.agents).length !== count)
       throw Error("Неверный состав снимка");
+    const events = parsed.archive ?? parsed.state.events;
+    console.log(
+      JSON.stringify({
+        actors: count,
+        days: (parsed.state.minute - 360) / 1440,
+        events: events.length,
+        criticalHunger: Object.values(parsed.state.agents).filter(
+          (a) => a.hunger < 150,
+        ).length,
+        exhausted: Object.values(parsed.state.agents).filter(
+          (a) => a.energy < 100,
+        ).length,
+        failedPlans: events.filter((e) => e.type === "plan_failed").length,
+        blockedEvents: events.filter((e) => e.type === "blocked").length,
+        money: Object.values(parsed.state.accounts).reduce((a, b) => a + b, 0),
+        midpointRestoreExact: true,
+      }),
+    );
   }
   console.log(
     "Нагрузочные снимки приняты схемой серверного API; балансы сходятся.",

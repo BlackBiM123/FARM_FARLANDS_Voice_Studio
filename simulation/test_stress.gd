@@ -44,13 +44,24 @@ func _initialize() -> void:
 			fail("Нагрузочный снимок не восстановлен: "+restored.error)
 			return
 		var b=Core.new()
-		b.event_sink=func(_event):pass
+		var resumed_history:Array=[]
+		b.event_sink=func(event):resumed_history.append(event)
 		b.start(world,"stress-"+str(count))
 		for step in int(duration/60):
 			b.advance(60)
+			if step==int(duration/120)-1:
+				var resumed=Core.new()
+				resumed.event_sink=func(event):resumed_history.append(event)
+				if not resumed.restore(JSON.parse_string(JSON.stringify(b.snapshot()))):
+					fail("Не восстановлена середина длительного прогона: "+resumed.error)
+					return
+				b=resumed
 			if b.error!="": break
-		if JSON.stringify(a.state,"",true)!=JSON.stringify(b.state,"",true):
-			fail("Остановка по бюджету зависит от величины шага")
+		if JSON.stringify(JSON.parse_string(JSON.stringify(a.state)),"",true)!=JSON.stringify(JSON.parse_string(JSON.stringify(b.state)),"",true):
+			fail("Состояние зависит от величины шага или восстановления на середине")
+			return
+		if JSON.stringify(JSON.parse_string(JSON.stringify(history)),"",true)!=JSON.stringify(JSON.parse_string(JSON.stringify(resumed_history)),"",true):
+			fail("Полный журнал изменился после восстановления на середине")
 			return
 		var file=FileAccess.open(args[1]+"/stress-"+str(count)+".json",FileAccess.WRITE)
 		report.archive=history

@@ -178,4 +178,34 @@ test("module descriptions drive the real core and restore without changing autho
   expect(saved.world.places).toEqual(project.world.places);
   expect(saved.world.accounts).toEqual(project.world.accounts);
   expect(errors).toEqual([]);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page
+    .getByRole("button", { name: "Описание модулей", exact: true })
+    .click();
+  await page.locator(".mechanics-module > summary").click();
+  await page
+    .getByRole("checkbox", { name: "Включить в следующий запуск", exact: true })
+    .uncheck();
+  // Editing next-run definitions must not silently remove a live module.
+  expect((await download()).state.mechanics?.versions.module_1).toBe(1);
+  await page.getByRole("button", { name: "Новый запуск", exact: true }).click();
+  await page.getByRole("button", { name: "Час", exact: true }).click();
+  await expect(page.locator(".world-run-controls strong").first()).toHaveText(
+    "День 1 · 07:00",
+  );
+  const off = await download();
+  expect(off.state.mechanics?.versions.module_1).toBeUndefined();
+  expect(off.archive?.some((e) => e.type === "mechanic")).toBe(false);
+  await restore(checkpoint);
+  await expect(page.locator(".world-run-controls strong").first()).toHaveText(
+    "День 1 · 07:00",
+  );
+  await page.getByRole("button", { name: "Час", exact: true }).click();
+  await expect(page.locator(".world-run-controls strong").first()).toHaveText(
+    "День 1 · 08:00",
+  );
+  const enabledAgain = await download();
+  expect(enabledAgain.state).toEqual(straight.state);
+  expect(enabledAgain.archive).toEqual(straight.archive);
+  expect(errors).toEqual([]);
 });
