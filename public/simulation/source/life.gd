@@ -1,5 +1,5 @@
 extends RefCounted
-## Жизненные последствия v1. Денег и товаров не создаёт, авторский лор не меняет.
+## Жизненные последствия v2. Этапы исполняются только подтверждёнными событиями.
 static func enabled(world: Dictionary) -> bool:
 	return world.get("life",{}).get("enabled",false)
 
@@ -26,14 +26,32 @@ static func definition_error(world: Dictionary) -> String:
 		if not rule is Dictionary or not rule.has_all(["id","name","issuer","actor","target","deadlineMinutes","priority"]): return "Неполная просьба"
 		if ids.has(rule.id) or not rule.issuer in actors or not rule.actor in actors or not rule.target in actors or rule.issuer==rule.actor or rule.actor==rule.target or rule.target==rule.issuer: return "Неверные стороны просьбы"
 		ids[rule.id]=true
+		if rule.has("stages"):
+			if not rule.stages is Array or rule.stages.size()<1 or rule.stages.size()>8: return "Нужно 1–8 этапов просьбы"
+			var step_ids: Dictionary={}
+			for step in rule.stages:
+				if not step is Dictionary or not step.has_all(["id","kind","with","label"]) or step.kind!="conversation" or not step.with in ["target","issuer"] or step_ids.has(step.id) or not step.label is String or str(step.label).is_empty(): return "Неверный или повторный этап просьбы"
+				step_ids[step.id]=true
 		for key in ["deadlineMinutes","priority"]:
 			var n=rule[key]
 			if not (n is int or n is float) or float(n)!=floor(float(n)) or int(n)<1 or int(n)>(119 if key=="priority" else 43200): return "Неверные сроки или приоритет просьбы"
 	return ""
 
 static func initialize(world: Dictionary,state: Dictionary) -> void:
-	if not enabled(world) or state.has("life"): return
-	state.life={"version":1,"processedThrough":int(state.nextEvent)-1,"relations":{},"goals":{},"quests":{},"traces":{}}
+	if not enabled(world): return
+	if state.has("life"):
+		if int(state.life.version)==1:
+			for key in state.life.quests:
+				var rule=world.life.requests.filter(func(r):return r.id==key)[0]
+				var q: Dictionary=state.life.quests[key]
+				q.stages=new_stages(rule)
+				q.cursor=0
+				if q.status=="completed":
+					q.stages[0]={"id":q.stages[0].id,"status":"completed","cause":q.cause,"completedAt":int(q.updated)}
+					q.cursor=1
+			state.life.version=2
+		return
+	state.life={"version":2,"processedThrough":int(state.nextEvent)-1,"relations":{},"goals":{},"quests":{},"traces":{}}
 	for npc in world.agents:
 		state.life.goals[npc.id]={}
 		state.life.traces[npc.id]=[]
@@ -54,11 +72,11 @@ static func initialize(world: Dictionary,state: Dictionary) -> void:
 			state.life.relations[rel.from][rel.to]=scores
 			state.agents[rel.from].relationships[rel.to]=int(scores.affinity)
 
-static func validate(world: Dictionary,state: Dictionary,legacy: bool) -> String:
+static func validate(world: Dictionary,state: Dictionary,rules_version: int) -> String:
 	if not enabled(world): return "Отключён жизненный слой, но в снимке есть его состояние" if state.has("life") else ""
-	if not state.has("life"): return "" if legacy else "Пропало состояние жизненного слоя"
+	if not state.has("life"): return "" if rules_version<8 else "Пропало состояние жизненного слоя"
 	var life=state.life
-	if not life is Dictionary or int(life.get("version",0))!=1: return "Неизвестная версия жизненного слоя"
+	if not life is Dictionary or not int(life.get("version",0)) in [1,2] or (rules_version>=9 and int(life.version)!=2): return "Неизвестная версия жизненного слоя"
 	if not (life.get("processedThrough") is int or life.get("processedThrough") is float) or float(life.processedThrough)!=float(state.nextEvent)-1: return "Нарушен причинный курсор жизненного слоя"
 	for field in ["relations","goals","quests","traces"]:
 		if not life.get(field) is Dictionary: return "Неполный жизненный слой"
@@ -95,10 +113,36 @@ static func validate(world: Dictionary,state: Dictionary,legacy: bool) -> String
 		var rules=world.life.requests.filter(func(r):return r.id==key)
 		if rules.size()!=1 or not q is Dictionary: return "Неизвестная просьба в снимке"
 		var rule=rules[0]
+		if int(life.version)==1 and rule.has("stages"): return "Старое состояние не доказывает выполнение новых этапов"
 		if not q.get("status","") in ["active","completed","expired"] or not q.has_all(["created","deadline","updated","cause","issuer","actor","target"]): return "Неполная просьба"
 		if q.actor!=rule.actor or q.issuer!=rule.issuer or q.target!=rule.target or int(q.created)>int(q.updated) or int(q.updated)>int(state.minute) or int(q.deadline)!=int(q.created)+int(rule.deadlineMinutes): return "Неверные стороны или сроки просьбы"
 		if not valid_cause(q.cause,state) or not valid_minute(q.created,state) or not valid_minute(q.updated,state) or (q.status=="active" and int(q.deadline)<=int(state.minute)) or (q.status=="completed" and int(q.updated)>=int(q.deadline)) or (q.status=="expired" and int(q.updated)<int(q.deadline)): return "Неверное причинное состояние просьбы"
+		if int(life.version)==2:
+			var plan=stages(rule)
+			if not q.get("stages") is Array or not (q.get("cursor") is int or q.get("cursor") is float) or float(q.cursor)!=floor(float(q.cursor)) or q.stages.size()!=plan.size() or int(q.cursor)<0 or int(q.cursor)>plan.size(): return "Неверный план просьбы"
+			if (q.status=="completed")!=(int(q.cursor)==plan.size()): return "Статус просьбы не соответствует этапам"
+			var last_serial:=0
+			var last_minute:=int(q.created)
+			for i in plan.size():
+				var s=q.stages[i]
+				if not s is Dictionary or not s.has_all(["id","status","cause"]) or s.id!=plan[i].id: return "Этап не соответствует определению"
+				if i<int(q.cursor):
+					var serial:=int(str(s.cause).trim_prefix("event_"))
+					if s.status!="completed" or not valid_cause(s.cause,state) or serial<=last_serial or not valid_minute(s.get("completedAt"),state) or int(s.completedAt)<last_minute or int(s.completedAt)>int(q.updated) or int(s.completedAt)>=int(q.deadline): return "Нет доказательства завершения этапа"
+					last_serial=serial
+					last_minute=int(s.completedAt)
+				elif s.status!="pending" or s.cause!="" or s.has("completedAt"): return "Будущий этап уже изменён"
 	return ""
+
+static func stages(rule: Dictionary) -> Array:
+	return rule.get("stages",[{"id":"meet_target","kind":"conversation","with":"target","label":"Поговорить с нужным NPC"}])
+
+static func new_stages(rule: Dictionary) -> Array:
+	return stages(rule).map(func(step):return {"id":step.id,"status":"pending","cause":""})
+
+static func step_target(rule: Dictionary,q: Dictionary) -> String:
+	var plan=stages(rule)
+	return str(rule[plan[int(q.cursor)].with]) if int(q.get("cursor",0))<plan.size() else ""
 
 static func valid_minute(value,state: Dictionary) -> bool:
 	return (value is int or value is float) and float(value)==floor(float(value)) and int(value)>=360 and int(value)<=int(state.minute)
@@ -132,17 +176,7 @@ static func consume(world: Dictionary,state: Dictionary,event: Dictionary) -> Ar
 				rel.cause=event.id
 				state.life.relations[actor][other]=rel
 				state.agents[actor].relationships[other]=int(rel.affinity)
-			for rule in world.life.requests:
-				if state.life.quests.has(rule.id):
-					var q: Dictionary=state.life.quests[rule.id]
-					if q.status=="active" and pair.has(rule.actor) and pair.has(rule.target) and int(state.minute)<int(q.deadline):
-						q.status="completed"
-						q.updated=int(state.minute)
-						q.cause=event.id
-						effects.append({"actor":rule.actor,"text":"Выполнена просьба: "+str(rule.name),"data":{"cause":event.id,"request":rule.id,"status":"completed"}})
-				elif pair.has(rule.actor) and pair.has(rule.issuer):
-					state.life.quests[rule.id]={"status":"active","created":int(state.minute),"deadline":int(state.minute)+int(rule.deadlineMinutes),"updated":int(state.minute),"cause":event.id,"issuer":rule.issuer,"actor":rule.actor,"target":rule.target}
-					effects.append({"actor":rule.actor,"text":"Принята просьба: "+str(rule.name),"data":{"cause":event.id,"request":rule.id,"status":"active"}})
+	effects.append_array(progress_requests(world,state,event))
 	if event.type=="house" and state.life.goals[event.actor].has("housing"):
 		state.life.goals[event.actor].housing={"kind":"housing","status":"completed","updated":int(state.minute),"cause":event.id}
 		if str(event.data.get("previousHome",""))!=str(state.agents[event.actor].home):
@@ -160,6 +194,37 @@ static func consume(world: Dictionary,state: Dictionary,event: Dictionary) -> Ar
 			if outstanding>0 or goals.has("debt"):
 				if not goals.has("debt") or int(goals.debt.amount)!=outstanding:
 					goals.debt={"kind":"debt","status":"active" if outstanding>0 else "completed","amount":outstanding,"updated":int(state.minute),"cause":event.id}
+	return effects
+
+static func conversation(event: Dictionary,first: String,second: String) -> bool:
+	if event.type!="social" or first==second: return false
+	return (event.actor==first and event.data.get("other","")==second) or (event.actor==second and event.data.get("other","")==first)
+
+static func stage_matches(step: Dictionary,rule: Dictionary,event: Dictionary) -> bool:
+	# Новые примитивы добавляются здесь и в валидаторе, без второго автомата этапов.
+	match step.kind:
+		"conversation": return conversation(event,str(rule.actor),str(rule[step.with]))
+	return false
+
+static func progress_requests(world: Dictionary,state: Dictionary,event: Dictionary) -> Array:
+	var effects:Array=[]
+	for rule in world.life.requests:
+		if state.life.quests.has(rule.id):
+			var q: Dictionary=state.life.quests[rule.id]
+			if q.status!="active" or int(state.minute)>=int(q.deadline): continue
+			var step=stages(rule)[int(q.cursor)]
+			if not stage_matches(step,rule,event): continue
+			q.stages[int(q.cursor)]={"id":step.id,"status":"completed","cause":event.id,"completedAt":int(state.minute)}
+			q.cursor=int(q.cursor)+1
+			q.status="completed" if int(q.cursor)==q.stages.size() else "active"
+			q.updated=int(state.minute)
+			q.cause=event.id
+			var data={"cause":event.id,"request":rule.id,"status":q.status,"stage":step.id}
+			if step.kind=="conversation" and step.with=="issuer": data.participants=[rule.actor,rule.issuer]
+			effects.append({"actor":rule.actor,"text":("Выполнена просьба: " if q.status=="completed" else "Завершён этап: "+str(step.label)+" · ")+str(rule.name),"data":data})
+		elif conversation(event,str(rule.actor),str(rule.issuer)):
+			state.life.quests[rule.id]={"status":"active","created":int(state.minute),"deadline":int(state.minute)+int(rule.deadlineMinutes),"updated":int(state.minute),"cause":event.id,"issuer":rule.issuer,"actor":rule.actor,"target":rule.target,"cursor":0,"stages":new_stages(rule)}
+			effects.append({"actor":rule.actor,"text":"Принята просьба: "+str(rule.name),"data":{"cause":event.id,"request":rule.id,"status":"active"}})
 	return effects
 
 static func expire(world: Dictionary,state: Dictionary) -> Array:
@@ -181,4 +246,9 @@ static func active_rule(world: Dictionary,state: Dictionary,actor: String) -> Di
 	return best
 
 static func target(world: Dictionary,state: Dictionary,actor: String) -> String:
-	return str(active_rule(world,state,actor).get("target",""))
+	var rule=active_rule(world,state,actor)
+	return step_target(rule,state.life.quests[rule.id]) if not rule.is_empty() else ""
+
+static func stage_label(world: Dictionary,state: Dictionary,actor: String) -> String:
+	var rule=active_rule(world,state,actor)
+	return str(stages(rule)[int(state.life.quests[rule.id].cursor)].label) if not rule.is_empty() else ""

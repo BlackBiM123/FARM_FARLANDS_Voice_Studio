@@ -137,7 +137,7 @@ func restore(report: Dictionary) -> bool:
 	var mechanics_error:=Mechanics.definition_error(report.definition)
 	if mechanics_error=="": mechanics_error=Mechanics.validate(report.definition,candidate)
 	if mechanics_error=="": mechanics_error=Life.definition_error(report.definition)
-	if mechanics_error=="": mechanics_error=Life.validate(report.definition,candidate,int(report.get("rulesVersion",7))<8)
+	if mechanics_error=="": mechanics_error=Life.validate(report.definition,candidate,int(report.get("rulesVersion",7)))
 	if mechanics_error!="":
 		error=mechanics_error
 		return false
@@ -161,7 +161,7 @@ func restore(report: Dictionary) -> bool:
 	return true
 
 func snapshot() -> Dictionary:
-	return {"version":1,"rulesVersion":8,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
+	return {"version":1,"rulesVersion":9,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
 
 func advance(minutes: int) -> Dictionary:
 	error = ""
@@ -252,7 +252,9 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	a.choices.append({"action":"Пополнить запас еды","score":import_score,"reason":"Таверне нужна еда; есть продавец, деньги и маршрут через причал"})
 	if Life.target(definition,state,npc.id)!="":
 		for option in a.choices:
-			if option.action=="Общение": option.reason="Активная просьба: встретить "+_agent_name(Life.target(definition,state,npc.id))+". Нужны вечер, путь в таверну и свободный собеседник"
+			if option.action=="Общение":
+				var wait_reason: String="Ждёт вечера 17:00–21:00" if not evening else ("Нет открытого пути в таверну" if not _reachable(a.place,"tavern") else ("Дневная встреча уже использована" if state.ledger.has("social:"+npc.id+":"+str(_day())) else "Нужно присутствие и согласие собеседника"))
+				option.reason="Этап «"+Life.stage_label(definition,state,npc.id)+"»: "+_agent_name(Life.target(definition,state,npc.id))+". "+wait_reason
 	for choice in Mechanics.choices(definition,state,npc,a,mechanic_modules):
 		if not _reachable(a.place,str(choice._place)):
 			choice.score=-1
@@ -409,6 +411,8 @@ func _meet(npc: Dictionary, a: Dictionary) -> void:
 			return
 	a.action={"type":"idle","remaining":20}
 	a.reason="Собеседник занят или отсутствует; разговор не создан"
+	var wanted:=Life.target(definition,state,npc.id)
+	if wanted!="": a.reason="Этап «"+Life.stage_label(definition,state,npc.id)+"» ожидает "+_agent_name(wanted)+": "+("собеседника нет рядом" if state.agents[wanted].place!=a.place else ("собеседник уже завершил дневную встречу" if state.ledger.has("social:"+wanted+":"+str(_day())) else "собеседник занят или не согласен на разговор"))
 
 func _produce(npc: Dictionary) -> void:
 	var p: Dictionary=definition.production
@@ -495,7 +499,7 @@ func _event(type: String,actor: String,place: String,text: String,data: Dictiona
 	var witnesses: Array=[]
 	for key in state.agents:
 		var a: Dictionary=state.agents[key]
-		if key==actor or (type!="decision" and place!="" and a.place==place and not a.action.get("type","") in ["travel","rest"]):
+		if (type=="life" and data.has("participants") and key in data.participants) or key==actor or (type!="decision" and place!="" and a.place==place and not a.action.get("type","") in ["travel","rest"]):
 			witnesses.append(key)
 	witnesses.sort()
 	var event_id := "event_"+str(int(state.nextEvent))

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { formatWorldTime } from "../world-runs";
-import type { LifeDefinition } from "../../shared/life";
+import { requestStages, type LifeDefinition } from "../../shared/life";
 import type { WorldDefinition, WorldState } from "../../shared/world";
 const model = defineModel<LifeDefinition>();
 const emit = defineEmits<{ cause: [id: string] }>();
@@ -55,7 +55,42 @@ function request() {
     target: props.world.agents[2]!.id,
     deadlineMinutes: 4320,
     priority: 50,
+    stages: [
+      {
+        id: "meet_target",
+        kind: "conversation",
+        with: "target",
+        label: "Поговорить с нужным NPC",
+      },
+      {
+        id: "report_back",
+        kind: "conversation",
+        with: "issuer",
+        label: "Вернуться и доложить просителю",
+      },
+    ],
   });
+}
+type Request = LifeDefinition["requests"][number];
+function addStage(r: Request) {
+  r.stages ??= requestStages(r).map((s) => ({ ...s }));
+  let i = 1;
+  while (r.stages.some((s) => s.id === "stage_" + i)) i++;
+  r.stages.push({
+    id: "stage_" + i,
+    kind: "conversation",
+    with: "issuer",
+    label: "Новый этап",
+  });
+}
+function moveStage(r: Request, index: number, direction: number) {
+  if (!r.stages) return;
+  const [step] = r.stages.splice(index, 1);
+  r.stages.splice(index + direction, 0, step!);
+}
+function planFor(id: string) {
+  const r = current.value.life?.requests.find((r) => r.id === id);
+  return r ? requestStages(r) : [];
 }
 const name = (id: string) =>
   current.value.agents.find((a) => a.id === id)?.name ?? id;
@@ -178,8 +213,10 @@ const material = computed(() => {
           Проситель должен сначала поговорить с исполнителем. После этого
           исполнитель вечером старается встретить указанного NPC в таверне.
           Собеседник должен действительно прийти и быть свободен. Простой вход в
-          место не выполняет просьбу: нужен завершённый разговор до срока. Это
-          первый исполняемый тип квеста, не универсальный язык заданий.
+          место не выполняет этап: нужен завершённый разговор до общего срока.
+          Новая просьба требует встречи и отдельного доклада. Старые просьбы
+          остаются одноэтапными, пока их явно не изменят. Поддержаны до восьми
+          этапов разговора; предметные действия и награды пока не подключены.
         </p>
         <div v-for="(r, i) in model.requests" :key="r.id" class="life-card">
           <label
@@ -218,6 +255,43 @@ const material = computed(() => {
                 max="119"
             /></label>
           </div>
+          <h4>Последовательность этапов</h4>
+          <p v-if="!r.stages" class="life-note">
+            Прежняя просьба с одним этапом. Новые этапы не добавляются
+            автоматически.
+          </p>
+          <div v-for="(s, n) in r.stages" :key="s.id" class="life-stage">
+            <div class="life-fields">
+              <label
+                >Название этапа<input
+                  v-model="s.label"
+                  maxlength="120" /></label
+              ><label
+                >Завершённый разговор с<select v-model="s.with">
+                  <option value="target">Нужным NPC</option>
+                  <option value="issuer">Просителем</option>
+                </select></label
+              >
+            </div>
+            <div class="life-stage-actions">
+              <button :disabled="n === 0" @click="moveStage(r, n, -1)">
+                Выше</button
+              ><button
+                :disabled="n === r.stages!.length - 1"
+                @click="moveStage(r, n, 1)"
+              >
+                Ниже</button
+              ><button
+                :disabled="r.stages!.length === 1"
+                @click="r.stages!.splice(n, 1)"
+              >
+                Удалить этап
+              </button>
+            </div>
+          </div>
+          <button :disabled="(r.stages?.length ?? 1) >= 8" @click="addStage(r)">
+            Добавить этап
+          </button>
           <button @click="model.requests.splice(i, 1)">
             Удалить просьбу из черновика
           </button>
@@ -312,6 +386,42 @@ const material = computed(() => {
               </button></small
             >
           </p>
+          <ol
+            v-if="(q.actor === who || q.issuer === who) && q.stages"
+            class="life-stage-list"
+          >
+            <li
+              v-for="(s, n) in q.stages"
+              :key="s.id"
+              :data-current="q.status === 'active' && q.cursor === n"
+            >
+              <strong>{{ planFor(String(id))[n]?.label ?? s.id }}</strong> ·
+              {{
+                s.status === "completed"
+                  ? "Завершён"
+                  : q.status === "expired"
+                    ? "Не выполнен до срока"
+                    : q.cursor === n
+                      ? "Текущий этап"
+                      : "Ожидает предыдущих"
+              }}<small v-if="s.completedAt !== undefined"
+                >{{ formatWorldTime(s.completedAt) }} ·
+                <button @click="emit('cause', s.cause)">
+                  Событие завершения
+                </button></small
+              ><small v-else-if="q.status === 'active' && q.cursor === n"
+                >Нужен реальный завершённый разговор с
+                {{
+                  name(
+                    planFor(String(id))[n]?.with === "issuer"
+                      ? q.issuer
+                      : q.target,
+                  )
+                }}. Нужны вечер, путь, присутствие и согласие
+                собеседника.</small
+              >
+            </li>
+          </ol>
         </div>
         <details>
           <summary>
@@ -344,6 +454,29 @@ const material = computed(() => {
 <style scoped>
 .life-panel {
   padding: 20px;
+}
+.life-stage {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #ffffff18;
+  border-radius: 8px;
+}
+.life-stage-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.life-stage-list {
+  padding-left: 22px;
+  line-height: 1.7;
+}
+.life-stage-list li {
+  padding: 12px;
+  margin: 8px 0;
+  background: #ffffff04;
+}
+.life-stage-list li[data-current="true"] {
+  border-left: 3px solid #d3ad66;
 }
 .life-panel summary {
   cursor: pointer;

@@ -2,10 +2,10 @@
   "coreVersion": "farlands-core-1",
   "godot": "4.7.1",
   "sources": {
-    "world_core.gd": "d179237bb28befbdb5a4384acf4f221c9eeb3bdfca69f22e1b053d3da07d15dc",
+    "world_core.gd": "3ef558ecd227bf220336a255e036df88ab12bbf9cc0c8daa78255dd39a55ef3e",
     "mechanics.gd": "36028b2dfad71692f60c10a5a40a098ad8b26bf53bc743651c5133f660201545",
-    "life.gd": "2ba809e90ebc8fab87c1034dcf6657b5a9d05694e0cbf99c7fb397571a1c2306",
+    "life.gd": "666eda71f9dae9a079860f110cea6f5450bafbec69e6741a74077f32bf2c9eb4",
     "web.gd": "177c4719dba2643f5a4216ec46e46823fb1172e7b88c94152a04cb50b6a13f35"
   },
-  "pck": "b0a44f84b36e2e0459a707bd797e9ee3e9d67dd40b09ceeb87c33e67ab20fdc8"
+  "pck": "c7df468e8845ae607ea4f7029f916961459ae7cda18f3fd7c3d84c4a4b30493a"
 }

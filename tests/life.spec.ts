@@ -55,6 +55,20 @@ test("life consequences are causal, directed, private and survive Web/native res
         target: ids[2]!,
         deadlineMinutes: 4320,
         priority: 50,
+        stages: [
+          {
+            id: "meet",
+            kind: "conversation",
+            with: "target",
+            label: "Встреча",
+          },
+          {
+            id: "report",
+            kind: "conversation",
+            with: "issuer",
+            label: "Доклад",
+          },
+        ],
       },
     ],
   };
@@ -94,13 +108,30 @@ test("life consequences are causal, directed, private and survive Web/native res
     return parseReport(JSON.parse(Buffer.concat(chunks).toString()));
   }
   const saved = await download();
-  expect(saved.rulesVersion).toBe(8);
+  expect(saved.rulesVersion).toBe(9);
   expect(saved.state.life?.quests.meet_friend?.status).toBe("active");
+  expect(saved.state.life?.version).toBe(2);
+  expect(saved.state.life?.quests.meet_friend?.cursor).toBe(0);
+  expect(
+    saved.state.life?.quests.meet_friend?.stages?.map((s) => s.id),
+  ).toEqual(["meet", "report"]);
   expect(saved.state.life?.relations[ids[0]!]![ids[1]!]!.affinity).toBe(11);
   expect(saved.state.life?.relations[ids[1]!]![ids[0]!]!.affinity).toBe(1);
   for (const e of saved.archive!.filter((e) => e.type === "life"))
     expect(e.witnesses).toEqual([e.actor]);
   await page.locator(".life-panel>summary").click();
+  await page
+    .locator(".life-panel details>summary")
+    .filter({ hasText: "Просьбы о встрече" })
+    .click();
+  await page
+    .locator(".life-card .life-stage")
+    .first()
+    .getByRole("button", { name: "Ниже", exact: true })
+    .click();
+  expect((await download()).definition.life?.requests[0]?.stages?.[0]?.id).toBe(
+    "meet",
+  );
   await page
     .locator(".life-panel")
     .getByRole("button", { name: "Показать причину", exact: true })

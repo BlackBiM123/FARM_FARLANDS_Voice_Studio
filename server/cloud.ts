@@ -1,7 +1,11 @@
 import { cloudClient } from "./supabase.js";
 export { cloudClient } from "./supabase.js";
 import { z } from "zod";
-import { retainLifeActors } from "../shared/life.js";
+import {
+  retainLifeActors,
+  needsRequestStagePreservation,
+  preserveRequestStages,
+} from "../shared/life.js";
 import { authorized, sameOrigin } from "./auth.js";
 import { projectSchema, takeMetadataSchema } from "../shared/schema.js";
 import {
@@ -100,6 +104,7 @@ export async function handleCloud(request: Request) {
       ].some((key) => rawProject[key] === undefined);
       if (
         rawProject.world === undefined ||
+        needsRequestStagePreservation(rawProject.world) ||
         (typeof rawProject.world === "object" &&
           rawProject.world !== null &&
           (rawProject.world as Record<string, unknown>).life === undefined) ||
@@ -129,6 +134,11 @@ export async function handleCloud(request: Request) {
           .single();
         if (previous.error) throw Error("read");
         const old = projectSchema.parse(previous.data.payload);
+        preserveRequestStages(
+          old.world?.life,
+          parsed.data.project.world?.life,
+          rawProject.world,
+        );
         if (
           parsed.data.project.world &&
           typeof rawProject.world === "object" &&

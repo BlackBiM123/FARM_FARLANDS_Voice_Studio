@@ -6,6 +6,7 @@ func _initialize() -> void:
 	var world: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(args[0]))
 	test_mechanics(world)
 	test_life(world)
+	test_request_stages(world)
 	test_cooking(world)
 	test_needs(world)
 	test_scarcity_decisions(world)
@@ -367,7 +368,7 @@ func test_life(world: Dictionary) -> void:
 	Core.Life.consume(w,sim.state,social)
 	check(JSON.stringify(sim.state.life.relations)==relation_before,"Повторное применение того же события не меняет отношения")
 	var bad=sim.snapshot()
-	bad.state.life.version=2
+	bad.state.life.version=3
 	var intact=JSON.stringify(restored.state,"",true)
 	check(not restored.restore(bad) and JSON.stringify(restored.state,"",true)==intact,"Неизвестная версия отклоняется атомарно")
 	var expired=Core.new()
@@ -401,6 +402,101 @@ func test_life(world: Dictionary) -> void:
 	check(housing.state.life.goals[issuer].housing.status=="completed","Существующая покупка дома завершает причинную цель")
 	check(housing.state.life.traces[issuer].any(func(t):return t.kind=="move") or housing.state.events.any(func(e):return e.type=="house"),"Переезд связан с реальной покупкой")
 	conservation(housing.snapshot())
+
+func test_request_stages(world: Dictionary) -> void:
+	var w=world.duplicate(true)
+	for n in w.agents:
+		n.home="tavern"
+		n.role="resident"
+	var a: String=w.agents[0].id
+	var b: String=w.agents[1].id
+	var c: String=w.agents[2].id
+	w.life={"version":1,"enabled":true,"socialDelta":{"affinity":1,"trust":0,"respect":0,"attachment":0},"initialRelations":[],"requests":[{"id":"chain","name":"Встреча и доклад","issuer":a,"actor":b,"target":c,"deadlineMinutes":10080,"priority":50,"stages":[{"id":"meet","kind":"conversation","with":"target","label":"Встреча"},{"id":"report","kind":"conversation","with":"issuer","label":"Доклад"}]}]}
+	var core=Core.new()
+	core.start(w,"staged")
+	for actor in core.state.agents.values(): actor.action={"type":"idle","remaining":1000}
+	core._meet(w.agents[0],core.state.agents[a])
+	core.advance(20)
+	check(core.state.life.quests.chain.cursor==0,"Принятие просьбы не выполняет первый этап тем же разговором")
+	core.state.minute=1800
+	core.state.agents[b].action={}
+	core.state.agents[c].action={}
+	core._meet(w.agents[1],core.state.agents[b])
+	core.advance(10)
+	check(core.state.life.quests.chain.cursor==0,"Незавершённый разговор не является доказательством этапа")
+	var midway=Core.new()
+	check(midway.restore(JSON.parse_string(JSON.stringify(core.snapshot()))),"Сохранение посередине этапа принято")
+	core.advance(10)
+	midway.advance(10)
+	check(core.state.life.quests.chain.cursor==1 and core.state.life.quests.chain.status=="active","Встреча с целью ещё не завершает просьбу с докладом")
+	check(Core.Life.target(w,core.state,b)==a,"После встречи план переключается на просителя")
+	var objective_event=core.state.events.filter(func(e):return e.type=="social").back()
+	Core.Life.consume(w,core.state,objective_event)
+	check(core.state.life.quests.chain.cursor==1,"Повторное событие не закрывает следующий этап")
+	var pending_report=JSON.parse_string(JSON.stringify(core.snapshot()))
+	var resumed=Core.new()
+	check(resumed.restore(pending_report),"Ожидающий доклада этап восстановлен")
+	for sim in [core,resumed]:
+		sim.state.minute=3240
+		sim.state.agents[b].action={}
+		sim.state.agents[a].action={}
+		sim._meet(w.agents[1],sim.state.agents[b])
+		sim.advance(20)
+	check(core.state.life.quests.chain.status=="completed" and core.state.life.quests.chain.cursor==2,"Реальный доклад завершает всю цепочку")
+	check(core.state.life.quests.chain.stages[0].cause!=core.state.life.quests.chain.stages[1].cause,"У каждого завершённого этапа собственное подтверждение")
+	check(JSON.stringify(JSON.parse_string(JSON.stringify(core.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(resumed.state)),"",true),"Продолжение между этапами совпадает полностью")
+	var completion=core.state.events.filter(func(e):return e.type=="life" and e.data.get("status","")=="completed").back()
+	check(completion.witnesses.has(a) and completion.witnesses.has(b) and not completion.witnesses.has(c),"Проситель узнаёт о докладе только из своего разговора")
+	var invalid=pending_report.duplicate(true)
+	invalid.state.life.quests.chain.cursor=2
+	var intact=JSON.stringify(resumed.state,"",true)
+	check(not resumed.restore(invalid) and JSON.stringify(resumed.state,"",true)==intact,"Перескок этапов отклонён атомарно")
+	var expired=Core.new()
+	expired.restore(pending_report)
+	expired.state.minute=int(expired.state.life.quests.chain.deadline)-1
+	expired.advance(1)
+	check(expired.state.life.quests.chain.status=="expired" and expired.state.life.quests.chain.cursor==1,"Без доклада срок истекает, выполненный этап сохраняется")
+	var old_world=w.duplicate(true)
+	old_world.life.requests[0].erase("stages")
+	var old=Core.new()
+	old.start(old_world,"legacy-stages")
+	for actor in old.state.agents.values(): actor.action={"type":"idle","remaining":1000}
+	old._meet(old_world.agents[0],old.state.agents[a])
+	old.advance(20)
+	var legacy=old.snapshot()
+	legacy.rulesVersion=8
+	legacy.state.life.version=1
+	legacy.state.life.quests.chain.erase("stages")
+	legacy.state.life.quests.chain.erase("cursor")
+	var migrated=Core.new()
+	check(migrated.restore(legacy) and migrated.state.life.version==2 and migrated.state.life.quests.chain.stages.size()==1,"Старая просьба получает один прежний этап, без выдуманного доклада")
+	old.state.minute=1800
+	old.state.agents[b].action={}
+	old.state.agents[c].action={}
+	old._meet(old_world.agents[1],old.state.agents[b])
+	old.advance(20)
+	var legacy_done=old.snapshot()
+	legacy_done.rulesVersion=8
+	legacy_done.state.life.version=1
+	legacy_done.state.life.quests.chain.erase("stages")
+	legacy_done.state.life.quests.chain.erase("cursor")
+	check(migrated.restore(legacy_done) and migrated.state.life.quests.chain.status=="completed" and migrated.state.life.quests.chain.cursor==1,"Завершённая старая просьба не открывается заново при миграции")
+	var repeated_world=w.duplicate(true)
+	repeated_world.life.requests[0].stages[1].with="target"
+	var repeated=Core.new()
+	repeated.start(repeated_world,"repeated-stages")
+	for actor in repeated.state.agents.values(): actor.action={"type":"idle","remaining":1000}
+	repeated._meet(repeated_world.agents[0],repeated.state.agents[a])
+	repeated.advance(20)
+	repeated.state.minute=1800
+	repeated.state.agents[b].action={}
+	repeated.state.agents[c].action={}
+	repeated._meet(repeated_world.agents[1],repeated.state.agents[b])
+	repeated.advance(20)
+	check(repeated.state.life.quests.chain.cursor==1,"Один разговор не закрывает два одинаковых последовательных условия")
+	Core.Life.consume(repeated_world,repeated.state,repeated.state.events.filter(func(e):return e.type=="social").back())
+	check(repeated.state.life.quests.chain.cursor==1,"Повторное событие не закрывает одинаковый следующий этап")
+	conservation(core.snapshot())
 
 func mechanics_world(world: Dictionary) -> Dictionary:
 	var w=world.duplicate(true)

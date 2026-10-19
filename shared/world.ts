@@ -4,6 +4,7 @@ import {
   lifeDefinition,
   lifeState,
   lifeReferenceError,
+  requestStages,
   type LifeState,
 } from "./life.js";
 import {
@@ -342,6 +343,7 @@ export const reportSchema = z
         z.literal(6),
         z.literal(7),
         z.literal(8),
+        z.literal(9),
       ])
       .optional(),
     coreVersion: z.literal("farlands-core-1"),
@@ -388,6 +390,8 @@ export const reportSchema = z
     if (!life && r.definition.life?.enabled && (r.rulesVersion ?? 7) >= 8)
       fail("Пропало состояние жизненного слоя");
     if (life) {
+      if ((r.rulesVersion ?? 8) >= 9 && life.version !== 2)
+        fail("Требуется версия 2 жизненного состояния");
       if (life.processedThrough !== r.state.nextEvent - 1)
         fail("Неверный причинный курсор");
       const ids = Object.keys(r.state.agents);
@@ -443,6 +447,47 @@ export const reportSchema = z
             fail("Неверный жизненный след");
       for (const [id, q] of Object.entries(life.quests)) {
         const rule = r.definition.life?.requests.find((x) => x.id === id);
+        if (rule && life.version === 1 && rule.stages)
+          fail("Старое состояние не доказывает новые этапы");
+        if (rule && life.version === 2) {
+          const plan = requestStages(rule);
+          if (
+            !q.stages ||
+            q.cursor === undefined ||
+            q.stages.length !== plan.length ||
+            q.cursor > plan.length ||
+            (q.status === "completed") !== (q.cursor === plan.length)
+          )
+            fail("Неверный план просьбы");
+          else {
+            let last = 0,
+              lastTime = q.created;
+            for (let i = 0; i < plan.length; i++) {
+              const step = q.stages[i]!;
+              if (step.id !== plan[i]!.id) fail("Подменён этап");
+              if (i < q.cursor) {
+                const serial = Number(step.cause.slice(6));
+                if (
+                  step.status !== "completed" ||
+                  !causeOK(step.cause) ||
+                  serial <= last ||
+                  step.completedAt === undefined ||
+                  step.completedAt < lastTime ||
+                  step.completedAt > q.updated ||
+                  step.completedAt >= q.deadline
+                )
+                  fail("Нет доказательства этапа");
+                last = serial;
+                lastTime = step.completedAt ?? 0;
+              } else if (
+                step.status !== "pending" ||
+                step.cause ||
+                step.completedAt !== undefined
+              )
+                fail("Будущий этап изменён");
+            }
+          }
+        }
         if (
           !rule ||
           q.issuer !== rule.issuer ||

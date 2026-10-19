@@ -1,10 +1,79 @@
 import { describe, it, expect } from "vitest";
 import { worldSchema } from "../shared/world.js";
 import { createWorld } from "../src/world-defaults.js";
-import { lifeDefinition, lifeReferenceError } from "../shared/life.js";
+import {
+  lifeDefinition,
+  lifeReferenceError,
+  requestStages,
+  needsRequestStagePreservation,
+  preserveRequestStages,
+} from "../shared/life.js";
 import { projectSchema } from "../shared/schema.js";
 import { removeCharacter } from "../shared/remove-character.js";
 describe("life definition boundaries", () => {
+  it("preserves authored stages from old clients but allows explicit plan edits", () => {
+    const old = lifeDefinition.parse({
+      version: 1,
+      enabled: true,
+      socialDelta: { affinity: 1, trust: 0, respect: 0, attachment: 0 },
+      initialRelations: [],
+      requests: [
+        {
+          id: "q",
+          name: "Request",
+          issuer: "a",
+          actor: "b",
+          target: "c",
+          deadlineMinutes: 60,
+          priority: 50,
+          stages: [
+            { id: "meet", kind: "conversation", with: "target", label: "Meet" },
+            {
+              id: "report",
+              kind: "conversation",
+              with: "issuer",
+              label: "Report",
+            },
+          ],
+        },
+      ],
+    });
+    const next = structuredClone(old);
+    delete next.requests[0]!.stages;
+    const raw = { life: structuredClone(next) };
+    expect(needsRequestStagePreservation(raw)).toBe(true);
+    preserveRequestStages(old, next, raw);
+    expect(next.requests[0]!.stages).toEqual(old.requests[0]!.stages);
+    const explicit = structuredClone(next);
+    explicit.requests[0]!.stages = [explicit.requests[0]!.stages![0]!];
+    preserveRequestStages(old, explicit, { life: structuredClone(explicit) });
+    expect(explicit.requests[0]!.stages).toHaveLength(1);
+  });
+  it("keeps legacy requests single-stage and rejects duplicate step identifiers", () => {
+    const config = lifeDefinition.parse({
+      version: 1,
+      enabled: false,
+      socialDelta: { affinity: 1, trust: 0, respect: 0, attachment: 0 },
+      initialRelations: [],
+      requests: [
+        {
+          id: "q",
+          name: "Request",
+          issuer: "a",
+          actor: "b",
+          target: "c",
+          deadlineMinutes: 60,
+          priority: 50,
+        },
+      ],
+    });
+    expect(requestStages(config.requests[0]!)).toHaveLength(1);
+    config.requests[0]!.stages = [
+      { id: "same", kind: "conversation", with: "target", label: "A" },
+      { id: "same", kind: "conversation", with: "issuer", label: "B" },
+    ];
+    expect(lifeReferenceError(config, ["a", "b", "c"])).toBeTruthy();
+  });
   it("cleans life links when deleting an actor without changing the original project", () => {
     const ids = [
       "npc_theo_hartley",
