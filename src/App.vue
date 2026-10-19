@@ -41,6 +41,11 @@ const DialoguePage = defineAsyncComponent({
   loadingComponent: PageLoader,
   delay: 0,
 });
+const GuidePage = defineAsyncComponent({
+  loader: () => import("./components/GuidePage.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+});
 const StoryPage = defineAsyncComponent({
   loader: () => import("./components/StoryPage.vue"),
   loadingComponent: PageLoader,
@@ -89,23 +94,25 @@ const initialDialogueNpc = computed(
     undefined,
 );
 const characterMode = computed(() =>
-  /^#\/(world|economy|simulation)(\/|$)/.test(characterHash.value)
-    ? "world"
-    : characterHash.value === "#/settings"
-      ? "settings"
-      : characterHash.value.startsWith("#/dialogue")
-        ? "dialogue"
-        : characterHash.value.startsWith("#/stories")
-          ? "stories"
-          : characterHash.value.startsWith("#/families")
-            ? "families"
-            : characterHash.value === "#/characters/new"
-              ? "new"
-              : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
-                ? "edit"
-                : characterHash.value === "#/characters"
-                  ? "catalog"
-                  : "studio",
+  characterHash.value.split("?")[0] === "#/guide"
+    ? "guide"
+    : /^#\/(world|economy|simulation)(\/|$)/.test(characterHash.value)
+      ? "world"
+      : characterHash.value === "#/settings"
+        ? "settings"
+        : characterHash.value.startsWith("#/dialogue")
+          ? "dialogue"
+          : characterHash.value.startsWith("#/stories")
+            ? "stories"
+            : characterHash.value.startsWith("#/families")
+              ? "families"
+              : characterHash.value === "#/characters/new"
+                ? "new"
+                : /^#\/characters\/[a-z0-9_-]+\/edit$/.test(characterHash.value)
+                  ? "edit"
+                  : characterHash.value === "#/characters"
+                    ? "catalog"
+                    : "studio",
 );
 const editingCharacter = computed(() =>
   npcs.value.find(
@@ -1295,6 +1302,11 @@ function pauseOthers(e: Event) {
         @click="navigate('/simulation')"
       >
         Симуляция</button
+      ><button
+        :class="{ chosen: characterMode === 'guide' }"
+        @click="navigate('/guide')"
+      >
+        Руководство</button
       ><span>GOOGLE · GEMINI 3.8 FLASH TTS</span
       ><small
         >{{ npcs.length }} ПЕРСОНАЖЕЙ ·
@@ -1347,7 +1359,8 @@ function pauseOthers(e: Event) {
         <p>{{ gameStyleRule }}</p>
       </details>
     </section>
-    <section v-if="characterMode === 'settings'" class="settings-page">
+    <GuidePage v-if="characterMode === 'guide'" />
+    <section v-else-if="characterMode === 'settings'" class="settings-page">
       <div class="panel">
         <h2>Настройки</h2>
         <p>Учётная запись: {{ account?.username }}</p>
