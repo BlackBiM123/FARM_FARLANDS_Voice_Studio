@@ -5,6 +5,8 @@ var definition: Dictionary = {}
 var state: Dictionary = {}
 var error := ""
 var path_cache: Dictionary={}
+## Адаптер обязан сохранить события отдельно. Без него остаётся совместимый полный журнал.
+var event_sink: Callable
 
 func start(world: Dictionary, content_hash: String) -> Dictionary:
 	error = ""
@@ -20,9 +22,12 @@ func start(world: Dictionary, content_hash: String) -> Dictionary:
 		state.baselineItems[item] = int(state.baselineItems.get(item,0)) + int(stock.amount)
 	state.owners[world.house.place] = world.house.seller
 	state.obligations=[]
+	if event_sink.is_valid(): state.journalMode="external"
 	for npc in world.agents:
 		state.agents[npc.id] = {"id":npc.id,"place":npc.home,"energy":900,"hunger":900,"action":{},"reason":"Начало дня","choices":[],"goal":"Собственный дом" if npc.goalHouse else "Работа и спокойная жизнь","knowledge":[],"relationships":{},"workMinutes":0,"lastPaidDay":-1,"home":npc.home,"ownsHouse":false}
 	_event("start","","","Начало отдельного тестового мира. Авторские анкеты не изменяются.")
+	if event_sink.is_valid():
+		for actor in state.agents.values(): actor.knownEventCount=int(actor.get("knownEventCount",0))
 	return snapshot()
 
 func restore(report: Dictionary) -> bool:
@@ -31,6 +36,9 @@ func restore(report: Dictionary) -> bool:
 		error = "Несовместимый отчёт или версия ядра"
 		return false
 	var candidate: Dictionary = report.get("state",{})
+	if candidate.get("journalMode","")=="external" and not event_sink.is_valid():
+		error="Для этого снимка нужен адаптер отдельного журнала"
+		return false
 	if not report.get("definition") is Dictionary or int(candidate.get("minute",-1)) < 360 or int(candidate.get("minute",-1)) > 43560:
 		error = "Неполный снимок"
 		return false
@@ -95,11 +103,20 @@ func restore(report: Dictionary) -> bool:
 	definition = report.definition.duplicate(true)
 	path_cache.clear()
 	state = candidate.duplicate(true)
+	state.minute=int(state.minute)
+	state.nextEvent=int(state.nextEvent)
+	state.rng=int(state.rng)
 	if not state.has("obligations"): state.obligations=[]
+	if event_sink.is_valid():
+		state.journalMode="external"
+		state.events=state.events.slice(maxi(0,state.events.size()-128))
+		for actor in state.agents.values():
+			actor.knownEventCount=int(actor.get("knownEventCount",actor.knowledge.size()))
+			actor.knowledge=actor.knowledge.slice(maxi(0,actor.knowledge.size()-128))
 	return true
 
 func snapshot() -> Dictionary:
-	return {"version":1,"rulesVersion":5,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
+	return {"version":1,"rulesVersion":6,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
 
 func advance(minutes: int) -> Dictionary:
 	error = ""
@@ -114,7 +131,7 @@ func advance(minutes: int) -> Dictionary:
 		# Нельзя продолжать расчёт, который уже невозможно восстановить из облака.
 		var check_interval:=10 if definition.agents.size()>20 else 60
 		var byte_budget:=2100000 if definition.agents.size()>20 else 2800000
-		if state.events.size()>=14000 or (int(state.minute)%check_interval==0 and JSON.stringify(snapshot()).to_utf8_buffer().size()>byte_budget):
+		if state.get("journalMode","")!="external" and (state.events.size()>=14000 or (int(state.minute)%check_interval==0 and JSON.stringify(snapshot()).to_utf8_buffer().size()>byte_budget)):
 			error="Достигнут безопасный размер снимка. Запуск остановлен; сохраните отчёт. Для более длинного прогона уменьшите число участников."
 			break
 		state.minute += 1
@@ -366,7 +383,7 @@ func _settle_obligations() -> void:
 	for debt in state.obligations:
 		if int(debt.remaining)<=0: continue
 		var amount:=mini(int(debt.remaining),int(state.accounts.get(debt.from,0)))
-		if amount>0 and _pay(debt.from,debt.to,amount,"settle:"+debt.id+":"+str(debt.remaining),debt.actor,debt.label):
+		if amount>0 and _pay(debt.from,debt.to,amount,"settle:"+debt.id+":"+str(int(debt.remaining)),debt.actor,debt.label):
 			debt.remaining-=amount
 		if int(debt.remaining)==0:
 			state.ledger.append(debt.id)
@@ -388,11 +405,17 @@ func _event(type: String,actor: String,place: String,text: String,data: Dictiona
 		var a: Dictionary=state.agents[key]
 		if key==actor or (type!="decision" and place!="" and a.place==place and not a.action.get("type","") in ["travel","rest"]):
 			witnesses.append(key)
-	var event_id := "event_"+str(state.nextEvent)
+	var event_id := "event_"+str(int(state.nextEvent))
 	state.nextEvent+=1
 	state.events.append({"id":event_id,"minute":state.minute,"type":type,"actor":actor,"place":place,"text":text,"witnesses":witnesses,"data":data})
+	if event_sink.is_valid():
+		event_sink.call(state.events.back())
+		if state.events.size()>128: state.events.pop_front()
 	for key in witnesses:
 		state.agents[key].knowledge.append(event_id)
+		if event_sink.is_valid():
+			state.agents[key].knownEventCount=int(state.agents[key].get("knownEventCount",0))+1
+			if state.agents[key].knowledge.size()>128: state.agents[key].knowledge.pop_front()
 
 func _path(from: String,to: String) -> Array:
 	var key:=from+":"+to

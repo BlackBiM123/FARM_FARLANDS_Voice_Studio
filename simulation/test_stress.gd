@@ -17,8 +17,11 @@ func _initialize() -> void:
 			world.accounts.append({"id":actor.id,"name":actor.name,"balance":70})
 		var started=Time.get_ticks_msec()
 		var a=Core.new()
+		var history:Array=[]
+		a.event_sink=func(event):history.append(event)
 		a.start(world,"stress-"+str(count))
-		a.advance(10080)
+		var duration=43200 if count==27 else 10080
+		for chunk in range(0,duration,240): a.advance(mini(240,duration-chunk))
 		var run_error=a.error
 		if run_error!="" and not run_error.contains("размер снимка"):
 			fail(run_error)
@@ -28,19 +31,25 @@ func _initialize() -> void:
 		if size>=3400000 or int(a.state.minute)<=360:
 			fail("Снимок не укладывается в предел API: "+str(size))
 			return
+		if int(a.state.minute)!=360+duration or history.size()!=int(a.state.nextEvent)-1:
+			fail("Не завершён полный прогон или потеряны события")
+			return
 		var restored=Core.new()
+		restored.event_sink=func(_event):pass
 		if not restored.restore(report):
 			fail("Нагрузочный снимок не восстановлен: "+restored.error)
 			return
 		var b=Core.new()
+		b.event_sink=func(_event):pass
 		b.start(world,"stress-"+str(count))
-		for step in 168:
+		for step in int(duration/60):
 			b.advance(60)
 			if b.error!="": break
 		if JSON.stringify(a.state,"",true)!=JSON.stringify(b.state,"",true):
 			fail("Остановка по бюджету зависит от величины шага")
 			return
 		var file=FileAccess.open(args[1]+"/stress-"+str(count)+".json",FileAccess.WRITE)
+		report.archive=history
 		file.store_string(JSON.stringify(report))
 		file.close()
 		print("Нагрузка: ",count," NPC; минута ",a.state.minute,"; байт ",size,"; мс ",Time.get_ticks_msec()-started,"; остановка по бюджету: ",run_error!="")

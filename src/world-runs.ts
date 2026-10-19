@@ -2,7 +2,13 @@ import type { WorldDefinition, WorldState } from "../shared/world";
 import { reportSchema } from "../shared/world";
 export type WorldReport = {
   version: 1;
-  rulesVersion?: 2 | 3 | 4 | 5;
+  rulesVersion?: 2 | 3 | 4 | 5 | 6;
+  journalId?: string;
+  archive?: import("../shared/world").WorldEvent[];
+  journal?: {
+    count: number;
+    parts: { hash: string; first: number; last: number; count: number }[];
+  };
   coreVersion: "farlands-core-1";
   contentHash: string;
   definition: WorldDefinition;

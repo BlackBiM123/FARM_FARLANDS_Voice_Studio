@@ -65,6 +65,12 @@ export const worldSchema = z
           goalHouse: z.boolean(),
           helpfulness: z.number().min(0).max(100),
           carryCapacity: z.number().min(0).max(1000).optional(),
+          setupStatus: z.enum(["test", "reviewed"]).optional(),
+          setupNotes: z.string().max(2000).optional(),
+          sourceProfession: z.string().max(250).optional(),
+          sourceHome: z.string().max(250).optional(),
+          sourceWorkplace: z.string().max(250).optional(),
+          sourceGoal: z.string().max(1500).optional(),
         }),
       )
       .max(100),
@@ -136,6 +142,7 @@ export type WorldEvent = {
   data: Record<string, any>;
 };
 export type WorldAgent = {
+  knownEventCount?: number;
   cargo?: { item: string; amount: number; owner: string; source: string };
   id: string;
   place: string;
@@ -153,6 +160,7 @@ export type WorldAgent = {
   ownsHouse: boolean;
 };
 export type WorldState = {
+  journalMode?: "external";
   obligations?: {
     id: string;
     from: string;
@@ -187,6 +195,7 @@ export type WorldState = {
 };
 const action = z.record(z.string(), z.unknown());
 const agentState = z.object({
+  knownEventCount: num.optional(),
   id,
   place: id,
   energy: z.number().int().min(0).max(1000),
@@ -208,6 +217,7 @@ const agentState = z.object({
   cargo: z.object({ item: id, amount: num, owner: id, source: id }).optional(),
 });
 const stateSchema = z.object({
+  journalMode: z.literal("external").optional(),
   obligations: z
     .array(
       z.object({
@@ -262,12 +272,49 @@ export const reportSchema = z
   .object({
     version: z.literal(1),
     rulesVersion: z
-      .union([z.literal(2), z.literal(3), z.literal(4), z.literal(5)])
+      .union([
+        z.literal(2),
+        z.literal(3),
+        z.literal(4),
+        z.literal(5),
+        z.literal(6),
+      ])
       .optional(),
     coreVersion: z.literal("farlands-core-1"),
     contentHash: z.string().min(1).max(128),
     definition: worldSchema,
     state: stateSchema,
+    journalId: z.string().uuid().optional(),
+    archive: z
+      .array(
+        z.object({
+          id: z.string(),
+          minute: num,
+          type: z.string(),
+          actor: z.string(),
+          place: z.string(),
+          text: z.string().max(2000),
+          witnesses: z.array(z.string()),
+          data: z.record(z.string(), z.unknown()),
+        }),
+      )
+      .max(1000000)
+      .optional(),
+    journal: z
+      .object({
+        count: num,
+        parts: z
+          .array(
+            z.object({
+              hash: z.string().regex(/^[a-f0-9]{64}$/),
+              first: num,
+              last: num,
+              count: num,
+            }),
+          )
+          .max(10000),
+      })
+      .optional(),
   })
   .superRefine((r, c) => {
     const fail = (message: string) => c.addIssue({ code: "custom", message });

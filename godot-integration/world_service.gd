@@ -5,8 +5,10 @@ const Core=preload("res://addons/farlands_world/world_core.gd")
 var core=Core.new()
 var active:=false
 var last_error:=""
+var journal:Array=[]
 signal state_changed
 func _ready() -> void:
+	core.event_sink=func(event):journal.append(event)
 	add_to_group("saveable")
 	var clock=get_node_or_null("/root/GameClock")
 	if clock:
@@ -17,6 +19,7 @@ func _ready() -> void:
 	if FileAccess.file_exists("res://world/definition.json"):
 		load_world("res://world/definition.json")
 func configure(definition: Dictionary,content_hash: String) -> void:
+	journal=[]
 	core.start(definition,content_hash)
 	active=true
 	last_error=""
@@ -58,11 +61,18 @@ func _on_day(_day: int,_season: StringName) -> void:
 func save_id() -> StringName:
 	return &"world_simulation"
 func save_state() -> Dictionary:
-	return core.snapshot() if active else {}
+	if not active:return {}
+	var report=core.snapshot()
+	report.archive=journal.duplicate(true)
+	return report
 func load_state(data: Dictionary) -> void:
 	if data.is_empty():
 		return
+	if data.state.get("journalMode","")=="external" and data.get("archive",[]).size()!=int(data.state.nextEvent)-1:
+		last_error="Для восстановления нужен полный архив журнала, а не только компактный снимок"
+		return
 	if core.restore(data):
+		journal=data.get("archive",data.state.events).duplicate(true)
 		active=true
 		last_error=""
 		state_changed.emit()

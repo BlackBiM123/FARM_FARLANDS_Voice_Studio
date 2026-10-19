@@ -13,8 +13,12 @@ func _ready() -> void:
 		return
 	GameClock.sleep()
 	var standalone=Core.new()
+	var history:Array=[]
+	standalone.event_sink=func(event):history.append(event)
 	standalone.start(world,"clock-test")
 	standalone.advance(1440)
+	if not check(history==service.journal,"Отдельный журнал совпадает при обработке сна"):
+		return
 	if not check(JSON.stringify(service.core.state,"",true)==JSON.stringify(standalone.state,"",true),"Сон обрабатывает всю ночь, а не только смену дня"):
 		return
 	var saved=SaveGame.collect_state()

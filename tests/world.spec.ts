@@ -163,9 +163,15 @@ test("world editors and the real Godot Web core preserve lore and match headless
   for await (const chunk of stream!) chunks.push(chunk);
   const report = JSON.parse(Buffer.concat(chunks).toString()) as WorldReport;
   expect(checkWorld(report)).toEqual([]);
-  expect(report.state.events.some((e) => e.type === "house")).toBe(true);
-  expect(report.state.events.some((e) => e.type === "social")).toBe(true);
-  expect(report.state.events.some((e) => e.type === "delivery")).toBe(true);
+  expect(
+    (report.archive ?? report.state.events).some((e) => e.type === "house"),
+  ).toBe(true);
+  expect(
+    (report.archive ?? report.state.events).some((e) => e.type === "social"),
+  ).toBe(true);
+  expect(
+    (report.archive ?? report.state.events).some((e) => e.type === "delivery"),
+  ).toBe(true);
   expect(report.contentHash).toBe(await worldHash(report.definition));
   if (process.env.GODOT) {
     const temp = mkdtempSync(join(tmpdir(), "farlands-core-"));
@@ -235,6 +241,8 @@ test("world editors and the real Godot Web core preserve lore and match headless
     "День 31 · 05:30",
   );
   await page.getByRole("button", { name: "7 дней", exact: true }).click();
+  await page.waitForTimeout(300);
+  expect(await page.locator('.world-error').allTextContents()).toEqual([]);
   await expect(page.locator(".world-run-controls strong").first()).toHaveText(
     "День 31 · 06:00",
   );
@@ -272,9 +280,6 @@ test("world editors and the real Godot Web core preserve lore and match headless
     ),
   ).toBeVisible();
   await page.getByRole("button", { name: "7 дней", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Остановить прогон", exact: true })
-    .click();
   await expect(
     page.getByText(
       "Прогон остановлен. Скачайте отчёт JSON: локальное сохранение не подтверждено.",

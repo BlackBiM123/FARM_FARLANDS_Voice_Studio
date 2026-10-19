@@ -7,6 +7,7 @@ import {
   worldSchema,
   type WorldDefinition,
   type WorldAgent,
+  type WorldEvent,
 } from "../../shared/world";
 import { createWorld, worldHash } from "../world-defaults";
 import {
@@ -19,6 +20,12 @@ import {
   type WorldReport,
 } from "../world-runs";
 import { cloudRequest } from "../cloud-client";
+import { prepareRoster } from "../world-roster";
+import { appendJournal, readJournal, journalHash } from "../world-journal";
+import { checkJournal, journalPageSchema } from "../../shared/journal";
+let journalEvents: WorldEvent[] = [];
+let journalId = crypto.randomUUID();
+let journalStorageFailed = false;
 const catalog = ref<
     { id: string; name: string; weight: number; baseValue: number }[]
   >([]),
@@ -106,7 +113,7 @@ const agents = computed(() =>
     () => report.value?.state.agents[selectedAgent.value] ?? agents.value[0],
   );
 const visibleEvents = computed(() =>
-  (report.value?.state.events ?? [])
+  (report.value ? journalEvents : [])
     .filter(
       (e) =>
         (!eventType.value || e.type === eventType.value) &&
@@ -381,6 +388,15 @@ function addAgent() {
     helpfulness: 50,
   });
 }
+function prepareAll() {
+  try {
+    draft.value = prepareRoster(draft.value, props.npcs);
+    notice.value =
+      "Состав подготовлен в черновике. Новые параметры помечены как тестовые; проверьте привязки и сохраните мир.";
+  } catch (e) {
+    error.value = String(e);
+  }
+}
 function addAccount() {
   draft.value.accounts.push({
     id: "account_" + crypto.randomUUID().slice(0, 8),
@@ -532,7 +548,7 @@ function command(action: string, data: Record<string, unknown> = {}) {
     );
   });
 }
-function receive(event: MessageEvent) {
+async function receive(event: MessageEvent) {
   if (
     event.origin !== location.origin ||
     event.source !== engineFrame.value?.contentWindow ||
@@ -557,6 +573,30 @@ function receive(event: MessageEvent) {
   }
   clearTimeout(p.timer);
   pending.delete(event.data.requestId);
+  try {
+    const incoming: WorldEvent[] = [];
+    const raw = event.data.events ?? [];
+    for (let i = 0; i < raw.length; i += 128)
+      incoming.push(...journalPageSchema.parse(raw.slice(i, i + 128)));
+    for (const e of incoming) {
+      if (e.id !== `event_${journalEvents.length + 1}`)
+        throw Error("Разрыв входящего журнала");
+      journalEvents.push(e);
+    }
+    try {
+      await appendJournal(
+        journalId,
+        journalStorageFailed ? journalEvents : incoming,
+      );
+      journalStorageFailed = false;
+    } catch {
+      journalStorageFailed = true;
+      pause();
+    }
+  } catch (e) {
+    p.reject(e instanceof Error ? e : Error(String(e)));
+    return;
+  }
   if (event.data.error) {
     // Ядро может остановить длинный прогон после части шага. Показываем его
     // фактический снимок, чтобы UI и последующее сохранение не отставали.
@@ -575,12 +615,14 @@ function receive(event: MessageEvent) {
   }
 }
 async function applyReport(value: WorldReport) {
+  value = { ...value, journalId };
   report.value = value;
   if (!value.state.agents[selectedAgent.value])
     selectedAgent.value = Object.keys(value.state.agents)[0] ?? "";
   localSaveState.value = "saving";
   try {
     await saveLocalReport(value);
+    if (journalStorageFailed) throw Error("Журнал не сохранён");
     localSaveState.value = "saved";
   } catch {
     localSaveState.value = "failed";
@@ -596,6 +638,9 @@ async function newRun() {
   }
   busy.value = true;
   error.value = "";
+  journalId = crypto.randomUUID();
+  journalEvents = [];
+  journalStorageFailed = false;
   try {
     const definition = worldSchema.parse(
         JSON.parse(JSON.stringify(draft.value)),
@@ -669,18 +714,68 @@ function play() {
 }
 async function restoreRun(value: WorldReport) {
   pause();
+  const previous = {
+    journalId,
+    events: journalEvents,
+    failed: journalStorageFailed,
+  };
   busy.value = true;
   error.value = "";
   notice.value = "";
   try {
+    if (value.rulesVersion !== 6) {
+      value = JSON.parse(JSON.stringify(value)) as WorldReport;
+      const canonical = (id: string) =>
+        id.replace(/^(event_[1-9][0-9]*)\.0$/, "$1");
+      for (const event of value.state.events) event.id = canonical(event.id);
+      for (const event of value.archive ?? []) event.id = canonical(event.id);
+      for (const actor of Object.values(value.state.agents))
+        actor.knowledge = actor.knowledge.map(canonical);
+    }
     if ((await worldHash(value.definition)) !== value.contentHash)
       throw Error("Контрольная сумма определений не совпадает");
-    await applyReport(await command("restore", { report: value }));
+    let history: WorldEvent[];
+    if (value.archive) history = value.archive;
+    else if (value.journal) {
+      history = [];
+      for (let i = 0; i < value.journal.parts.length; i += 4) {
+        notice.value = `Загружаем журнал: ${i} / ${value.journal.parts.length} страниц`;
+        const pages = await Promise.all(
+          value.journal.parts.slice(i, i + 4).map(async (part) => {
+            const page = journalPageSchema.parse(
+              await cloudRequest("/api/simulation?part=" + part.hash),
+            );
+            if ((await journalHash(page)) !== part.hash)
+              throw Error("Повреждена страница журнала");
+            return page;
+          }),
+        );
+        for (const page of pages) history.push(...page);
+      }
+    } else if (value.state.journalMode === "external" && value.journalId)
+      history = (await readJournal(value.journalId)).filter(
+        (e) => Number(e.id.slice(6)) < value.state.nextEvent,
+      );
+    else history = value.state.events;
+    checkJournal(history, value.state.nextEvent);
+    journalId = crypto.randomUUID();
+    journalEvents = history;
+    journalStorageFailed = false;
+    try {
+      await appendJournal(journalId, history);
+    } catch {
+      journalStorageFailed = true;
+    }
+    const { archive, journal, ...compact } = value;
+    await applyReport(await command("restore", { report: compact }));
     notice.value =
-      value.rulesVersion === 5
+      value.rulesVersion === 6
         ? "Запуск восстановлен. Авторские анкеты не менялись."
-        : "Старый снимок восстановлен. Продолжение использует правила 5: согласованные планы и остановку по игровому времени. Старые долги задним числом не создаются. Для сравнения результатов создайте новый запуск.";
+        : "Снимок восстановлен с переносом журнала в отдельный архив. Старые долги задним числом не создаются.";
   } catch (e) {
+    journalId = previous.journalId;
+    journalEvents = previous.events;
+    journalStorageFailed = previous.failed;
     error.value = String(e);
   } finally {
     busy.value = false;
@@ -692,7 +787,8 @@ async function importRun(event: Event) {
   input.value = "";
   if (!file) return;
   try {
-    if (file.size > 3500000) throw Error("Максимум 3,5 МБ");
+    if (file.size > 100000000)
+      throw Error("Максимум 100 МБ для полного архива");
     await restoreRun(parseReport(JSON.parse(await file.text())));
   } catch (e) {
     error.value = String(e);
@@ -718,14 +814,53 @@ async function cloudList() {
     notice.value = String(e);
   }
 }
+function exportRun() {
+  if (!report.value) return;
+  try {
+    checkJournal(journalEvents, report.value.state.nextEvent);
+    downloadWorld(
+      { ...report.value, archive: journalEvents },
+      "farlands-run.json",
+    );
+  } catch (e) {
+    error.value = String(e);
+  }
+}
 async function cloudSave() {
   if (!report.value) return;
   cloudBusy.value = true;
   try {
+    const frozen = structuredClone(
+      JSON.parse(JSON.stringify(report.value)),
+    ) as WorldReport;
+    const events = journalEvents.slice(0, frozen.state.nextEvent - 1);
+    checkJournal(events, frozen.state.nextEvent);
+    const parts: NonNullable<WorldReport["journal"]>["parts"] = [];
+    for (let base = 0; base < events.length; base += 512) {
+      notice.value = `Сохраняем журнал: ${Math.min(base, events.length)} / ${events.length} событий`;
+      await Promise.all(
+        [0, 128, 256, 384]
+          .filter((offset) => base + offset < events.length)
+          .map(async (offset) => {
+            const i = base + offset,
+              page = journalPageSchema.parse(events.slice(i, i + 128)),
+              hash = await journalHash(page);
+            parts[i / 128] = {
+              hash,
+              first: i + 1,
+              last: i + page.length,
+              count: page.length,
+            };
+            await cloudRequest("/api/simulation?part=" + hash, "PUT", page);
+          }),
+      );
+    }
+    frozen.journal = { parts, count: events.length };
+    delete frozen.archive;
     await cloudRequest(
       "/api/simulation?id=" + crypto.randomUUID(),
       "PUT",
-      report.value,
+      frozen,
     );
     notice.value = "Снимок сохранён в приватное облако";
     await cloudList();
@@ -1081,6 +1216,7 @@ onUnmounted(() => {
             <thead>
               <tr>
                 <th>Персонаж</th>
+                <th>Настройка</th>
                 <th>Дом</th>
                 <th>Работа</th>
                 <th>Роль</th>
@@ -1095,7 +1231,24 @@ onUnmounted(() => {
             </thead>
             <tbody>
               <tr v-for="a in draft.agents" :key="a.id">
-                <td>{{ a.name }}</td>
+                <td>
+                  {{ a.name }}
+                  <details v-if="a.sourceProfession || a.setupNotes">
+                    <summary>Анкета и допущения</summary>
+                    <p>
+                      {{ a.sourceProfession }} · {{ a.sourceHome }} ·
+                      {{ a.sourceWorkplace }}
+                    </p>
+                    <p>{{ a.sourceGoal }}</p>
+                    <p>{{ a.setupNotes }}</p>
+                  </details>
+                </td>
+                <td>
+                  <select v-model="a.setupStatus">
+                    <option value="test">Тестовые</option>
+                    <option value="reviewed">Проверены</option>
+                  </select>
+                </td>
                 <td>
                   <select v-model="a.home">
                     <option v-for="p in draft.places" :key="p.id" :value="p.id">
@@ -1169,6 +1322,7 @@ onUnmounted(() => {
         <button @click="addAgent">
           <Plus :size="15" />Подключить следующего NPC
         </button>
+        <button @click="prepareAll">Подготовить всех живых NPC</button>
         <p class="hint">
           Отключение меняет только состав новых прогонов. Анкета, счета и уже
           сохранённые запуски сохраняются.
@@ -1487,17 +1641,13 @@ onUnmounted(() => {
         </p>
         <p class="hint">
           Определения фиксируются при создании запуска. Изменения редактора
-          действуют только в новом прогоне. Максимум 30 дней на запуск. Большие
-          группы могут остановиться раньше по размеру снимка; история не
-          обрезается.
+          действуют только в новом прогоне. Максимум 30 дней на запуск. История
+          хранится отдельными страницами; полный архив доступен в JSON.
         </p>
         <div class="world-toolbar">
           <button :disabled="!report || cloudBusy" @click="cloudSave">
             <Save :size="15" />Снимок в облако</button
-          ><button
-            :disabled="!report"
-            @click="downloadWorld(report, 'farlands-run.json')"
-          >
+          ><button :disabled="!report" @click="exportRun">
             <Download :size="15" />Отчёт JSON</button
           ><button :disabled="!ready || busy" @click="imported?.click()">
             <Upload :size="15" />Восстановить файл</button
@@ -1542,7 +1692,7 @@ onUnmounted(() => {
             ><span>Денег во всех счетах</span>
           </div>
           <div class="panel">
-            <strong>{{ report.state.events.length }}</strong
+            <strong>{{ report.state.nextEvent - 1 }}</strong
             ><span>Событий</span>
           </div>
           <div
@@ -1779,7 +1929,11 @@ onUnmounted(() => {
             </details>
             <details>
               <summary>Знания и отношения</summary>
-              <p>Известных событий: {{ inspect.knowledge.length }}</p>
+              <p>
+                Известных событий:
+                {{ inspect.knownEventCount ?? inspect.knowledge.length }} ·
+                недавняя память: {{ inspect.knowledge.length }}
+              </p>
               <p v-for="(value, key) in inspect.relationships" :key="key">
                 {{ agentName(String(key)) }}: {{ value }}
               </p>
