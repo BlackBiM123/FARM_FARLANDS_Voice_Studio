@@ -138,13 +138,20 @@ export function auditExperiment(
       return {
         id,
         name: checkNames[id],
-        status: restored === undefined ? "skip" : restored ? "pass" : "fail",
-        detail:
-          restored === undefined
-            ? "Не выполнено: нужен завершённый повторный прогон."
+        status:
+          e.minutes < 2 || restored === undefined
+            ? "skip"
             : restored
-              ? "Состояние и полный журнал совпали с продолжением JSON-снимка на середине."
-              : "Состояние или журнал отличаются после восстановления.",
+              ? "pass"
+              : "fail",
+        detail:
+          e.minutes < 2
+            ? "Для проверки продолжения из середины нужно не менее двух игровых минут."
+            : restored === undefined
+              ? "Не выполнено: нужен завершённый повторный прогон."
+              : restored
+                ? "Состояние и полный журнал совпали с продолжением JSON-снимка на середине."
+                : "Состояние или журнал отличаются после восстановления.",
       };
     return {
       id,

@@ -183,7 +183,7 @@ async function run() {
     mid: WorldReport | undefined,
     original: WorldReport | undefined,
     restored: boolean | undefined;
-  const replay = e.checks.includes("restore"),
+  const replay = e.checks.includes("restore") && e.minutes >= 2,
     half = Math.max(1, Math.floor(e.minutes / 2));
   function result(
     status: ExperimentResult["status"],
