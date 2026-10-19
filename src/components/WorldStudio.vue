@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import JSZip from "jszip";
+import LifePanel from "./LifePanel.vue";
+import { retainLifeActors } from "../../shared/life";
 import AgentDecision from "./AgentDecision.vue";
 import NeedsPanel from "./NeedsPanel.vue";
 import MechanicsPanel from "./MechanicsPanel.vue";
 import FoodChainPanel from "./FoodChainPanel.vue";
-import { computed, ref, watch, onMounted, onUnmounted } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { Play, Pause, Save, Download, Upload, Plus } from "lucide-vue-next";
 import type { NPC } from "../../shared/schema";
 import {
@@ -125,9 +127,11 @@ const visibleEvents = computed(() =>
           e.actor === eventActor.value ||
           e.witnesses.includes(eventActor.value)) &&
         (!eventQuery.value ||
-          (e.text + " " + agentName(e.actor))
-            .toLowerCase()
-            .includes(eventQuery.value.toLowerCase())),
+          (/^event_[1-9][0-9]*$/.test(eventQuery.value)
+            ? e.id === eventQuery.value
+            : (e.id + " " + e.text + " " + agentName(e.actor))
+                .toLowerCase()
+                .includes(eventQuery.value.toLowerCase()))),
     )
     .slice(-100)
     .reverse(),
@@ -142,6 +146,15 @@ const inspectedDecision = computed(() => {
   }
   return undefined;
 });
+async function focusLifeCause(id: string) {
+  eventType.value = "";
+  eventActor.value = "";
+  eventQuery.value = id;
+  await nextTick();
+  document
+    .querySelector(".world-journal")
+    ?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
 const checks = computed(() => (report.value ? checkWorld(report.value) : [])),
   valid = computed(() => worldSchema.safeParse(draft.value));
 const alerts = computed(() => {
@@ -175,6 +188,8 @@ const cargoWeight = computed(() =>
     : 0,
 );
 const eventLabels: Record<string, string> = {
+  life: "Жизненные изменения",
+  obligation_settled: "Погашение обязательства",
   mechanic: "Действие модуля",
   cooking: "Приготовление еды",
   plan_failed: "План изменился",
@@ -324,7 +339,7 @@ async function exportGodotWorld() {
         2,
       ),
     );
-    for (const file of ["world_core.gd", "mechanics.gd"]) {
+    for (const file of ["world_core.gd", "mechanics.gd", "life.gd"]) {
       const r = await fetch("/simulation/source/" + file);
       if (!r.ok) throw Error("Нет исходника ядра");
       zip.file("addons/farlands_world/" + file, await r.text());
@@ -422,6 +437,10 @@ function addAccount() {
 }
 function detachAgent(id: string) {
   draft.value.agents = draft.value.agents.filter((a) => a.id !== id);
+  draft.value.life = retainLifeActors(
+    draft.value.life,
+    draft.value.agents.map((a) => a.id),
+  );
 }
 function addItem() {
   draft.value.items.push({
@@ -1584,6 +1603,14 @@ onUnmounted(() => {
         ></template></div
     ></template>
     <template v-else>
+      <LifePanel
+        v-model="draft.life"
+        :world="draft"
+        :current-world="report?.definition"
+        :state="report?.state"
+        :actor="inspect?.id"
+        @cause="focusLifeCause"
+      />
       <MechanicsPanel
         v-model="draft.mechanics"
         :active="report?.definition.mechanics"

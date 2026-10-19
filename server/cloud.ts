@@ -1,6 +1,7 @@
 import { cloudClient } from "./supabase.js";
 export { cloudClient } from "./supabase.js";
 import { z } from "zod";
+import { retainLifeActors } from "../shared/life.js";
 import { authorized, sameOrigin } from "./auth.js";
 import { projectSchema, takeMetadataSchema } from "../shared/schema.js";
 import {
@@ -99,6 +100,9 @@ export async function handleCloud(request: Request) {
       ].some((key) => rawProject[key] === undefined);
       if (
         rawProject.world === undefined ||
+        (typeof rawProject.world === "object" &&
+          rawProject.world !== null &&
+          (rawProject.world as Record<string, unknown>).life === undefined) ||
         missingContent ||
         parsed.data.project.families.some(
           (f) =>
@@ -125,6 +129,17 @@ export async function handleCloud(request: Request) {
           .single();
         if (previous.error) throw Error("read");
         const old = projectSchema.parse(previous.data.payload);
+        if (
+          parsed.data.project.world &&
+          typeof rawProject.world === "object" &&
+          rawProject.world !== null &&
+          (rawProject.world as Record<string, unknown>).life === undefined &&
+          old.world?.life
+        )
+          parsed.data.project.world.life = retainLifeActors(
+            old.world.life,
+            parsed.data.project.world.agents.map((a) => a.id),
+          );
         if (rawProject.world === undefined && old.world) {
           parsed.data.project.world = {
             ...old.world,
@@ -132,6 +147,10 @@ export async function handleCloud(request: Request) {
               parsed.data.project.npcs.some((n) => n.id === a.id),
             ),
           };
+          parsed.data.project.world.life = retainLifeActors(
+            old.world.life,
+            parsed.data.project.world.agents.map((a) => a.id),
+          );
         }
         for (const family of parsed.data.project.families) {
           if (family.kind === undefined)

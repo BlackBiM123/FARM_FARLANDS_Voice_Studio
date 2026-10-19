@@ -98,7 +98,7 @@ test("module descriptions drive the real core and restore without changing autho
     "День 1 · 07:00",
   );
   const checkpoint = await download();
-  expect(checkpoint.rulesVersion).toBe(7);
+  expect(checkpoint.rulesVersion).toBe(8);
   expect(checkpoint.state.mechanics?.values["module_1:test_clock"]?.world).toBe(
     60,
   );

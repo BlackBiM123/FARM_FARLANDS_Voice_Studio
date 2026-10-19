@@ -30,6 +30,7 @@ mkdirSync("public/simulation/source", { recursive: true });
 for (const file of [
   "world_core.gd",
   "mechanics.gd",
+  "life.gd",
   "run.gd",
   "project.godot",
   "web.gd",
@@ -52,7 +53,7 @@ for (const file of [
     readFileSync("godot-integration/" + file),
   );
 const hashes = Object.fromEntries(
-  ["world_core.gd", "mechanics.gd", "web.gd"].map((f) => [
+  ["world_core.gd", "mechanics.gd", "life.gd", "web.gd"].map((f) => [
     f,
     createHash("sha256")
       .update(readFileSync("simulation/" + f))

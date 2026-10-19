@@ -51,6 +51,15 @@ export const scenarioNames = {
 export function prepareExperiment(e: Experiment): WorldDefinition {
   const w = structuredClone(e.world);
   w.agents = w.agents.filter((a) => e.participants.includes(a.id));
+  if (w.life) {
+    const ids = new Set(w.agents.map((a) => a.id));
+    w.life.initialRelations = w.life.initialRelations.filter(
+      (r) => ids.has(r.from) && ids.has(r.to),
+    );
+    w.life.requests = w.life.requests.filter((r) =>
+      [r.issuer, r.actor, r.target].every((id) => ids.has(id)),
+    );
+  }
   if (!w.agents.length) throw Error("Выберите хотя бы одного участника");
   const food = w.cooking?.enabled ? w.cooking.output : "potato";
   if (e.scenario === "no_food")

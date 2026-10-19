@@ -1,6 +1,7 @@
 extends RefCounted
 ## Единое ядро: Godot Web, headless и игра используют этот файл без второй реализации.
 const Mechanics=preload("mechanics.gd")
+const Life=preload("life.gd")
 const VERSION := "farlands-core-1"
 var definition: Dictionary = {}
 var state: Dictionary = {}
@@ -34,6 +35,7 @@ func _food() -> String:
 func start(world: Dictionary, content_hash: String) -> Dictionary:
 	error = ""
 	var mechanics_error:=Mechanics.definition_error(world)
+	if mechanics_error=="": mechanics_error=Life.definition_error(world)
 	if mechanics_error!="":
 		error=mechanics_error
 		return {}
@@ -56,6 +58,7 @@ func start(world: Dictionary, content_hash: String) -> Dictionary:
 	for npc in world.agents:
 		state.agents[npc.id] = {"id":npc.id,"place":npc.home,"energy":0,"hunger":0,"action":{},"reason":"Начало дня","choices":[],"goal":"Собственный дом" if npc.goalHouse else "Работа и спокойная жизнь","knowledge":[],"relationships":{},"workMinutes":0,"lastPaidDay":-1,"home":npc.home,"ownsHouse":false}
 	Mechanics.initialize(definition,state,true)
+	Life.initialize(definition,state)
 	_event("start","","","Начало отдельного тестового мира. Авторские анкеты не изменяются.")
 	if event_sink.is_valid():
 		for actor in state.agents.values(): actor.knownEventCount=int(actor.get("knownEventCount",0))
@@ -133,6 +136,8 @@ func restore(report: Dictionary) -> bool:
 		debt_ids[debt.id]=true
 	var mechanics_error:=Mechanics.definition_error(report.definition)
 	if mechanics_error=="": mechanics_error=Mechanics.validate(report.definition,candidate)
+	if mechanics_error=="": mechanics_error=Life.definition_error(report.definition)
+	if mechanics_error=="": mechanics_error=Life.validate(report.definition,candidate,int(report.get("rulesVersion",7))<8)
 	if mechanics_error!="":
 		error=mechanics_error
 		return false
@@ -145,6 +150,7 @@ func restore(report: Dictionary) -> bool:
 	state.nextEvent=int(state.nextEvent)
 	state.rng=int(state.rng)
 	Mechanics.initialize(definition,state,false)
+	Life.initialize(definition,state)
 	if not state.has("obligations"): state.obligations=[]
 	if event_sink.is_valid():
 		state.journalMode="external"
@@ -155,7 +161,7 @@ func restore(report: Dictionary) -> bool:
 	return true
 
 func snapshot() -> Dictionary:
-	return {"version":1,"rulesVersion":7,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
+	return {"version":1,"rulesVersion":8,"coreVersion":VERSION,"contentHash":state.get("contentHash",""),"definition":definition.duplicate(true),"state":state.duplicate(true)}
 
 func advance(minutes: int) -> Dictionary:
 	error = ""
@@ -174,6 +180,7 @@ func advance(minutes: int) -> Dictionary:
 			error="Достигнут безопасный размер снимка. Запуск остановлен; сохраните отчёт. Для более длинного прогона уменьшите число участников."
 			break
 		state.minute += 1
+		for effect in Life.expire(definition,state): _event("life",effect.actor,"",effect.text,effect.data)
 		var clock := int(state.minute) % 1440
 		if clock == 360:
 			_dawn()
@@ -224,6 +231,8 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	var buy_score := 95 if npc.goalHouse and not a.ownsHouse and _available(npc.account)>=int(house.price) and state.owners.get(house.place,"")==house.seller else -1
 	var evening := clock>=1020 and clock<1260
 	var social_score := 40 if evening else -1
+	var active_request: Dictionary=Life.active_rule(definition,state,npc.id)
+	if evening and not active_request.is_empty(): social_score=int(active_request.priority)
 	var delivery_score := (110 if _cooking() else 55+int(npc.helpfulness)/8) if npc.role=="stable" and clock>=(480 if _cooking() else 960) and clock<1200 and (_cooking() or not state.ledger.has("delivery:"+str(_day()))) and _delivery_amount(npc)>0 and (_cooking() or _stock_amount(definition.production.place,definition.production.owner,definition.production.output)>=2) else -1
 	var import_score := 110 if not _cooking() and npc.role=="stable" and clock>=480 and clock<1200 and _stock_amount("tavern","inn_business","potato")<20 and _stock_amount("pier","outside","potato")>=10 and int(state.accounts.get("inn_business",0))>=10*_price(_food()) and not _cargo_in_transit("potato") else -1
 	if not _reachable(a.place,npc.work): work_score=-1
@@ -241,6 +250,9 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	a.choices = [{"action":"Отдых","score":sleep_score,"reason":"Энергия %d/1000, порог %d; ночь 22:00–06:00. %s" % [int(a.energy),_rule("restThreshold",150),"Дом доступен" if _reachable(a.place,a.home) else "Нет пути домой"]},{"action":"Поесть","score":eat_score,"reason":"Сытость %d/1000, порог %d. %s" % [int(a.hunger),_rule("eatThreshold",300),"Нет пути в таверну" if not _reachable(a.place,"tavern") else ("Нет еды в таверне" if _stock_amount("tavern","inn_business",_food())==0 else ("Не хватает денег на еду" if int(state.accounts[npc.account])<_price(_food()) else "Еда и деньги доступны"))]},{"action":"Купить дом","score":buy_score,"reason":"Достаточно собственных средств и есть продавец"},{"action":"Работа","score":work_score,"reason":"Обязательство 08:00–16:00"},{"action":"Перевозка","score":delivery_score,"reason":"Есть груз фермы; оплачивает таверна"},{"action":"Общение","score":social_score,"reason":"Свободный вечер и согласие второго участника"},{"action":"Свободное время","score":0,"reason":"Нет более важных доступных дел"}]
 	var best: Dictionary = a.choices[0]
 	a.choices.append({"action":"Пополнить запас еды","score":import_score,"reason":"Таверне нужна еда; есть продавец, деньги и маршрут через причал"})
+	if Life.target(definition,state,npc.id)!="":
+		for option in a.choices:
+			if option.action=="Общение": option.reason="Активная просьба: встретить "+_agent_name(Life.target(definition,state,npc.id))+". Нужны вечер, путь в таверну и свободный собеседник"
 	for choice in Mechanics.choices(definition,state,npc,a,mechanic_modules):
 		if not _reachable(a.place,str(choice._place)):
 			choice.score=-1
@@ -328,11 +340,12 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 		"buy":
 			var h: Dictionary = definition.house
 			if state.owners.get(h.place,"")==h.seller and _available(npc.account)>=int(h.price) and _pay(npc.account,h.seller,int(h.price),"house:"+h.place,npc.id,"Покупка собственного дома"):
+				var previous_home: String=a.home
 				state.owners[h.place]=npc.account
 				a.ownsHouse=true
 				a.home=h.place
 				a.goal="Обустроить дом и продолжать работу"
-				_event("house",npc.id,a.place,"Первый ключ: дом куплен на собственные средства")
+				_event("house",npc.id,a.place,"Первый ключ: дом куплен на собственные средства",{"previousHome":previous_home})
 		"pickup":
 			var pr: Dictionary = definition.production
 			var stock := _stock(pr.place,pr.owner,pr.output)
@@ -366,9 +379,10 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 			if action.get("leader",false):
 				var other: String = action.other
 				if state.agents.has(other):
-					a.relationships[other]=mini(100,int(a.relationships.get(other,0))+1)
 					var b: Dictionary=state.agents[other]
-					b.relationships[npc.id]=mini(100,int(b.relationships.get(npc.id,0))+1)
+					if not Life.enabled(definition):
+						a.relationships[other]=mini(100,int(a.relationships.get(other,0))+1)
+						b.relationships[npc.id]=mini(100,int(b.relationships.get(npc.id,0))+1)
 					_event("social",npc.id,a.place,"Совместный разговор: "+npc.name+" и "+_agent_name(other),{"other":other})
 
 func _meet(npc: Dictionary, a: Dictionary) -> void:
@@ -379,7 +393,11 @@ func _meet(npc: Dictionary, a: Dictionary) -> void:
 	for other in definition.agents:
 		if other.id==npc.id:
 			continue
+		var target:=Life.target(definition,state,npc.id)
+		if target!="" and other.id!=target: continue
 		var b: Dictionary=state.agents[other.id]
+		var other_target:=Life.target(definition,state,other.id)
+		if other_target!="" and other_target!=npc.id: continue
 		if state.ledger.has("social:"+other.id+":"+str(_day())): continue
 		if b.place==a.place and (b.action.is_empty() or b.action.type in ["idle","meet"]):
 			state.ledger.append(key)
@@ -458,6 +476,7 @@ func _settle_obligations() -> void:
 		var amount:=mini(int(debt.remaining),int(state.accounts.get(debt.from,0)))
 		if amount>0 and _pay(debt.from,debt.to,amount,"settle:"+debt.id+":"+str(int(debt.remaining)),debt.actor,debt.label):
 			debt.remaining-=amount
+			if Life.enabled(definition): _event("obligation_settled",debt.actor,"","Часть обязательства погашена",{"obligation":debt.id,"remaining":int(debt.remaining)})
 		if int(debt.remaining)==0:
 			state.ledger.append(debt.id)
 			if debt.kind=="wage" and state.agents.has(debt.actor):
@@ -490,6 +509,8 @@ func _event(type: String,actor: String,place: String,text: String,data: Dictiona
 		if event_sink.is_valid():
 			state.agents[key].knownEventCount=int(state.agents[key].get("knownEventCount",0))+1
 			if state.agents[key].knowledge.size()>128: state.agents[key].knowledge.pop_front()
+	for effect in Life.consume(definition,state,state.events.back().duplicate(true)):
+		_event("life",effect.actor,"",effect.text,effect.data)
 
 func _path(from: String,to: String) -> Array:
 	var key:=from+":"+to

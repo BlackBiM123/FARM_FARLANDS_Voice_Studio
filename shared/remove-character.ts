@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { retainLifeActors } from "./life.js";
 import type { projectSchema } from "./schema.js";
 type Project = z.infer<typeof projectSchema>;
 export function removeCharacter(project: Project, id: string): Project {
@@ -7,6 +8,11 @@ export function removeCharacter(project: Project, id: string): Project {
   next.npcs = next.npcs.filter((n) => n.id !== id);
   if (next.world)
     next.world.agents = next.world.agents.filter((a) => a.id !== id);
+  if (next.world)
+    next.world.life = retainLifeActors(
+      next.world.life,
+      next.world.agents.map((a) => a.id),
+    );
   for (const n of next.npcs)
     for (const r of n.profile.relationships)
       if (r.otherId === id) {

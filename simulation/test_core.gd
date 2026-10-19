@@ -5,6 +5,7 @@ func _initialize() -> void:
 	var args=OS.get_cmdline_user_args()
 	var world: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(args[0]))
 	test_mechanics(world)
+	test_life(world)
 	test_cooking(world)
 	test_needs(world)
 	test_scarcity_decisions(world)
@@ -331,6 +332,75 @@ func test_cooking(world: Dictionary) -> void:
 	check(restored.restore(JSON.parse_string(JSON.stringify(split.snapshot()))),"Кухня восстанавливается из JSON")
 	restored.advance(2880)
 	check(JSON.stringify(JSON.parse_string(JSON.stringify(core.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(restored.state)),"",true),"Продолжение кухни совпадает с непрерывным расчётом")
+
+func test_life(world: Dictionary) -> void:
+	var w=world.duplicate(true)
+	var issuer: String=w.agents[0].id
+	var actor: String=w.agents[1].id
+	var target: String=w.agents[2].id
+	w.life={"version":1,"enabled":true,"socialDelta":{"affinity":1,"trust":2,"respect":0,"attachment":0},"initialRelations":[{"from":issuer,"to":actor,"scores":{"affinity":10,"trust":20,"respect":30,"attachment":40}}],"requests":[{"id":"meet_friend","name":"Поговорить с третьим участником","issuer":issuer,"actor":actor,"target":target,"deadlineMinutes":3000,"priority":50}]}
+	var sim=Core.new()
+	sim.start(w,"life")
+	check(sim.error=="" and sim.state.has("life"),"Жизненный слой включается явно")
+	for a in sim.state.agents.values():
+		a.place="tavern"
+		a.action={"type":"idle","remaining":1000}
+	sim._meet(w.agents[0],sim.state.agents[issuer])
+	sim.advance(20)
+	check(sim.state.life.quests.meet_friend.status=="active","Просьба возникает только после законченного разговора")
+	check(sim.state.life.relations[issuer][actor].affinity==11 and sim.state.life.relations[issuer][actor].trust==22,"Отношения меняются от начальных значений по завершённому событию")
+	check(sim.state.life.relations[actor][issuer].affinity==1,"Обратное отношение хранится отдельно")
+	var saved=JSON.parse_string(JSON.stringify(sim.snapshot()))
+	var restored=Core.new()
+	check(restored.restore(saved),"Жизненные цели и просьба сохраняются")
+	for core in [sim,restored]:
+		core.state.minute=1800
+		core.state.agents[actor].action={}
+		core.state.agents[target].action={}
+		core._meet(w.agents[1],core.state.agents[actor])
+		check(core.state.agents[actor].action.get("other","")==target,"Активная просьба выбирает конкретного свободного собеседника")
+		core.advance(20)
+	check(sim.state.life.quests.meet_friend.status=="completed","Только завершённый разговор с целью выполняет просьбу")
+	check(JSON.stringify(JSON.parse_string(JSON.stringify(sim.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(restored.state)),"",true),"Восстановленная цепочка даёт тот же мир и причины")
+	var relation_before=JSON.stringify(sim.state.life.relations)
+	var social=sim.state.events.filter(func(e):return e.type=="social").back()
+	Core.Life.consume(w,sim.state,social)
+	check(JSON.stringify(sim.state.life.relations)==relation_before,"Повторное применение того же события не меняет отношения")
+	var bad=sim.snapshot()
+	bad.state.life.version=2
+	var intact=JSON.stringify(restored.state,"",true)
+	check(not restored.restore(bad) and JSON.stringify(restored.state,"",true)==intact,"Неизвестная версия отклоняется атомарно")
+	var expired=Core.new()
+	expired.restore(saved)
+	expired.state.minute=int(expired.state.life.quests.meet_friend.deadline)-1
+	expired.advance(1)
+	check(expired.state.life.quests.meet_friend.status=="expired","Срок истекает без выдуманного штрафа или награды")
+	var expired_again=Core.new()
+	check(expired_again.restore(JSON.parse_string(JSON.stringify(expired.snapshot()))),"Просроченная просьба и причина восстанавливаются")
+	var debt_core=Core.new()
+	debt_core.start(w,"life-debt")
+	debt_core._oblige(w.agents[0].account,"inn_business",10000,"life-test-rent",issuer,"rent","Проверка долга")
+	var remainder: int=debt_core.state.obligations[0].remaining
+	check(remainder>0 and debt_core.state.life.goals[issuer].debt.amount==remainder,"Денежная цель отражает реальный неоплаченный долг")
+	var donor: String=w.agents[1].account
+	debt_core._pay("seller",w.agents[0].account,mini(100,int(debt_core.state.accounts.seller)),"life-test-help",issuer,"Перевод")
+	debt_core._settle_obligations()
+	check(debt_core.state.life.goals[issuer].debt.amount==int(debt_core.state.obligations[0].remaining),"Частичная оплата обновляет цель после реального перевода")
+	var debt_resumed=Core.new()
+	check(debt_resumed.restore(JSON.parse_string(JSON.stringify(debt_core.snapshot()))),"Обязательство и его цель не расходятся при сохранении")
+	conservation(debt_core.snapshot())
+	var legacy=Core.new()
+	legacy.start(world,"life-legacy")
+	var legacy_save=legacy.snapshot()
+	legacy_save.rulesVersion=7
+	check(debt_resumed.restore(legacy_save) and not debt_resumed.state.has("life"),"Старый мир не получает выдуманную историю отношений")
+	conservation(sim.snapshot())
+	var housing=Core.new()
+	housing.start(w,"housing-life")
+	housing.advance(10080)
+	check(housing.state.life.goals[issuer].housing.status=="completed","Существующая покупка дома завершает причинную цель")
+	check(housing.state.life.traces[issuer].any(func(t):return t.kind=="move") or housing.state.events.any(func(e):return e.type=="house"),"Переезд связан с реальной покупкой")
+	conservation(housing.snapshot())
 
 func mechanics_world(world: Dictionary) -> Dictionary:
 	var w=world.duplicate(true)

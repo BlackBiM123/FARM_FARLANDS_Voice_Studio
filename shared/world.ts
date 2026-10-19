@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { needsSchema } from "./needs.js";
 import {
+  lifeDefinition,
+  lifeState,
+  lifeReferenceError,
+  type LifeState,
+} from "./life.js";
+import {
   mechanicsSchema,
   mechanicsStateSchema,
   mechanicChangeSchema,
@@ -94,6 +100,7 @@ export const worldSchema = z
       minutes: z.number().int().min(10).max(1440),
     }),
     mechanics: mechanicsSchema.optional(),
+    life: lifeDefinition.optional(),
     cooking: z
       .object({
         enabled: z.boolean(),
@@ -109,6 +116,11 @@ export const worldSchema = z
   })
   .superRefine((w, c) => {
     const fail = (message: string) => c.addIssue({ code: "custom", message });
+    const lifeError = lifeReferenceError(
+      w.life,
+      w.agents.map((a) => a.id),
+    );
+    if (lifeError) fail(lifeError);
     for (const rows of [
       w.places,
       w.routes,
@@ -203,6 +215,7 @@ export type WorldAgent = {
   ownsHouse: boolean;
 };
 export type WorldState = {
+  life?: LifeState;
   mechanics?: MechanicsState;
   journalMode?: "external";
   obligations?: {
@@ -264,6 +277,7 @@ const agentState = z.object({
 });
 const stateSchema = z.object({
   mechanics: mechanicsStateSchema.optional(),
+  life: lifeState.optional(),
   journalMode: z.literal("external").optional(),
   obligations: z
     .array(
@@ -327,6 +341,7 @@ export const reportSchema = z
         z.literal(5),
         z.literal(6),
         z.literal(7),
+        z.literal(8),
       ])
       .optional(),
     coreVersion: z.literal("farlands-core-1"),
@@ -367,6 +382,83 @@ export const reportSchema = z
   })
   .superRefine((r, c) => {
     const fail = (message: string) => c.addIssue({ code: "custom", message });
+    const life = r.state.life;
+    if (life && !r.definition.life?.enabled)
+      fail("Состояние выключенного жизненного слоя");
+    if (!life && r.definition.life?.enabled && (r.rulesVersion ?? 7) >= 8)
+      fail("Пропало состояние жизненного слоя");
+    if (life) {
+      if (life.processedThrough !== r.state.nextEvent - 1)
+        fail("Неверный причинный курсор");
+      const ids = Object.keys(r.state.agents);
+      for (const group of [life.relations, life.goals, life.traces])
+        if (
+          Object.keys(group).length !== ids.length ||
+          ids.some((id) => !(id in group))
+        )
+          fail("Разный состав жизненного слоя");
+      const causeOK = (cause: string) =>
+        !cause ||
+        (/^event_[1-9]\d*$/.test(cause) &&
+          Number(cause.slice(6)) < r.state.nextEvent);
+      for (const [actor, rels] of Object.entries(life.relations))
+        for (const [other, scores] of Object.entries(rels))
+          if (
+            !ids.includes(other) ||
+            actor === other ||
+            !causeOK(scores.cause) ||
+            (r.state.agents[actor]?.relationships[other] ?? 0) !==
+              scores.affinity
+          )
+            fail("Несовместимое направленное отношение");
+      for (const [actor, goals] of Object.entries(life.goals))
+        for (const [key, g] of Object.entries(goals)) {
+          if (
+            key !== g.kind ||
+            g.updated < 360 ||
+            g.updated > r.state.minute ||
+            !causeOK(g.cause)
+          )
+            fail("Неверная причина цели");
+          if (
+            g.kind === "housing" &&
+            (g.status === "completed") !== r.state.agents[actor]?.ownsHouse
+          )
+            fail("Состояние жилищной цели не совпало");
+          if (g.kind === "debt") {
+            const npc = r.definition.agents.find((a) => a.id === actor),
+              amount = (r.state.obligations ?? [])
+                .filter((d) => d.from === npc?.account)
+                .reduce((s, d) => s + d.remaining, 0);
+            if (
+              g.amount !== amount ||
+              (g.status === "completed") !== (amount === 0)
+            )
+              fail("Состояние долговой цели не совпало");
+          }
+        }
+      for (const traces of Object.values(life.traces))
+        for (const t of traces)
+          if (t.minute > r.state.minute || !causeOK(t.cause))
+            fail("Неверный жизненный след");
+      for (const [id, q] of Object.entries(life.quests)) {
+        const rule = r.definition.life?.requests.find((x) => x.id === id);
+        if (
+          !rule ||
+          q.issuer !== rule.issuer ||
+          q.actor !== rule.actor ||
+          q.target !== rule.target ||
+          q.created > q.updated ||
+          q.updated > r.state.minute ||
+          q.deadline !== q.created + rule.deadlineMinutes ||
+          !causeOK(q.cause) ||
+          (q.status === "active" && q.deadline <= r.state.minute) ||
+          (q.status === "completed" && q.updated >= q.deadline) ||
+          (q.status === "expired" && q.updated < q.deadline)
+        )
+          fail("Неверное состояние просьбы");
+      }
+    }
     if (r.state.contentHash !== r.contentHash) fail("Разные версии снимка");
     const places = new Set(r.definition.places.map((p) => p.id));
     const accounts = new Set(r.definition.accounts.map((a) => a.id));

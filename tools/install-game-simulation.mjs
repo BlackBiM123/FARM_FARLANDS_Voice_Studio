@@ -28,6 +28,7 @@ copyFileSync(
   root + "/addons/farlands_world/mechanics.gd",
 );
 const b = await rolldown({ input: "src/world-defaults.ts", platform: "node" });
+copyFileSync("simulation/life.gd", root + "/addons/farlands_world/life.gd");
 await b.write({
   file: "node_modules/.cache/world-defaults.mjs",
   format: "esm",
