@@ -4,6 +4,7 @@ var failed: Array[String]=[]
 func _initialize() -> void:
 	var args=OS.get_cmdline_user_args()
 	var world: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(args[0]))
+	test_needs(world)
 	var baseline=world.duplicate(true)
 	var routes=Core.new()
 	routes.start(world,"routes")
@@ -215,3 +216,31 @@ func conservation(report: Dictionary) -> void:
 		for npc_id in s.agents:
 			if s.agents[npc_id].knowledge.has(event.id):
 				check(event.witnesses.has(npc_id),"Знание только у свидетеля/участника")
+
+func test_needs(world: Dictionary) -> void:
+	var configured=world.duplicate(true)
+	configured.needs={"initialEnergy":800,"initialFullness":200,"fullnessDrain":0,"energyDrain":2,"restGain":9,"mealGain":400,"eatThreshold":201,"restThreshold":100,"eatPriority":190,"restPriority":180,"nightPriority":90}
+	var core=Core.new()
+	core.start(configured,"needs")
+	var npc: Dictionary=configured.agents[0]
+	var actor: Dictionary=core.state.agents[npc.id]
+	check(actor.energy==800 and actor.hunger==200,"Начальные потребности берутся из правил")
+	core.advance(1)
+	check(actor.hunger==200,"Нулевой расход сытости работает")
+	check(actor.choices.any(func(c):return c.action=="Поесть" and c.score==190),"Порог и приоритет еды меняют выбор ядра")
+	actor.action={"type":"rest","remaining":10}
+	core._tick(npc,actor)
+	check(actor.energy==809,"Скорость восстановления энергии настраивается")
+	actor.action={"type":"idle","remaining":10}
+	core._tick(npc,actor)
+	check(actor.energy==807,"Скорость расхода энергии настраивается")
+	var straight=Core.new()
+	straight.start(configured,"needs")
+	straight.advance(120)
+	var split=Core.new()
+	split.start(configured,"needs")
+	split.advance(60)
+	var restored=Core.new()
+	check(restored.restore(JSON.parse_string(JSON.stringify(split.snapshot()))),"Настроенные потребности восстанавливаются из JSON")
+	restored.advance(60)
+	check(JSON.stringify(JSON.parse_string(JSON.stringify(straight.state)),"",true)==JSON.stringify(JSON.parse_string(JSON.stringify(restored.state)),"",true),"Настройки потребностей сохраняются при продолжении")

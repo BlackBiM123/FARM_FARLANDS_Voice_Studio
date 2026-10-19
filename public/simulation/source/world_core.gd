@@ -8,6 +8,9 @@ var path_cache: Dictionary={}
 ## Адаптер обязан сохранить события отдельно. Без него остаётся совместимый полный журнал.
 var event_sink: Callable
 
+func _rule(key: String, fallback: int) -> int:
+	return int(definition.get("needs",{}).get(key,fallback))
+
 func start(world: Dictionary, content_hash: String) -> Dictionary:
 	error = ""
 	definition = world.duplicate(true)
@@ -24,7 +27,7 @@ func start(world: Dictionary, content_hash: String) -> Dictionary:
 	state.obligations=[]
 	if event_sink.is_valid(): state.journalMode="external"
 	for npc in world.agents:
-		state.agents[npc.id] = {"id":npc.id,"place":npc.home,"energy":900,"hunger":900,"action":{},"reason":"Начало дня","choices":[],"goal":"Собственный дом" if npc.goalHouse else "Работа и спокойная жизнь","knowledge":[],"relationships":{},"workMinutes":0,"lastPaidDay":-1,"home":npc.home,"ownsHouse":false}
+		state.agents[npc.id] = {"id":npc.id,"place":npc.home,"energy":_rule("initialEnergy",900),"hunger":_rule("initialFullness",900),"action":{},"reason":"Начало дня","choices":[],"goal":"Собственный дом" if npc.goalHouse else "Работа и спокойная жизнь","knowledge":[],"relationships":{},"workMinutes":0,"lastPaidDay":-1,"home":npc.home,"ownsHouse":false}
 	_event("start","","","Начало отдельного тестового мира. Авторские анкеты не изменяются.")
 	if event_sink.is_valid():
 		for actor in state.agents.values(): actor.knownEventCount=int(actor.get("knownEventCount",0))
@@ -153,13 +156,13 @@ func _dawn() -> void:
 	_event("day","","","Начался день "+str(_day()+1))
 
 func _tick(npc: Dictionary, a: Dictionary) -> void:
-	a.hunger = maxi(0,int(a.hunger)-1)
+	a.hunger = maxi(0,int(a.hunger)-_rule("fullnessDrain",1))
 	var action: Dictionary = a.action
 	if not action.is_empty():
 		if action.type == "rest":
-			a.energy = mini(1000,int(a.energy)+5)
+			a.energy = mini(1000,int(a.energy)+_rule("restGain",5))
 		else:
-			a.energy = maxi(0,int(a.energy)-1)
+			a.energy = maxi(0,int(a.energy)-_rule("energyDrain",1))
 		action.remaining = int(action.remaining)-1
 		if action.type == "work":
 			a.workMinutes += 1
@@ -182,8 +185,8 @@ func _tick(npc: Dictionary, a: Dictionary) -> void:
 func _choose(npc: Dictionary, a: Dictionary) -> void:
 	var clock := int(state.minute)%1440
 	var work_score := 80 if clock >= 480 and clock < 960 and npc.role!="resident" else -1
-	var sleep_score := 100 if clock < 360 or clock >= 1320 else (130 if int(a.energy)<150 else -1)
-	var eat_score := 120 if int(a.hunger)<300 else -1
+	var sleep_score := _rule("nightPriority",100) if clock < 360 or clock >= 1320 else (_rule("restPriority",130) if int(a.energy)<_rule("restThreshold",150) else -1)
+	var eat_score := _rule("eatPriority",120) if int(a.hunger)<_rule("eatThreshold",300) else -1
 	var house: Dictionary = definition.house
 	var buy_score := 95 if npc.goalHouse and not a.ownsHouse and _available(npc.account)>=int(house.price) and state.owners.get(house.place,"")==house.seller else -1
 	var evening := clock>=1020 and clock<1260
@@ -202,7 +205,7 @@ func _choose(npc: Dictionary, a: Dictionary) -> void:
 	if 10*_weight("potato")>float(npc.get("carryCapacity",10)): import_score=-1
 	if 2*_weight(definition.production.output)>float(npc.get("carryCapacity",10)): delivery_score=-1
 	if not _reachable(a.place,"tavern") or _stock_amount("tavern","inn_business","potato")==0 or int(state.accounts[npc.account])<_price("potato"): eat_score=-1
-	a.choices = [{"action":"Отдых","score":sleep_score,"reason":"Ночь или критическая усталость"},{"action":"Поесть","score":eat_score,"reason":"Голод и реальный запас еды"},{"action":"Купить дом","score":buy_score,"reason":"Достаточно собственных средств и есть продавец"},{"action":"Работа","score":work_score,"reason":"Обязательство 08:00–16:00"},{"action":"Перевозка","score":delivery_score,"reason":"Есть груз фермы; оплачивает таверна"},{"action":"Общение","score":social_score,"reason":"Свободный вечер и согласие второго участника"},{"action":"Свободное время","score":0,"reason":"Нет более важных доступных дел"}]
+	a.choices = [{"action":"Отдых","score":sleep_score,"reason":"Энергия %d/1000, порог %d; ночь 22:00–06:00. %s" % [int(a.energy),_rule("restThreshold",150),"Дом доступен" if _reachable(a.place,a.home) else "Нет пути домой"]},{"action":"Поесть","score":eat_score,"reason":"Сытость %d/1000, порог %d. %s" % [int(a.hunger),_rule("eatThreshold",300),"Нет пути в таверну" if not _reachable(a.place,"tavern") else ("Нет еды в таверне" if _stock_amount("tavern","inn_business","potato")==0 else ("Не хватает денег на еду" if int(state.accounts[npc.account])<_price("potato") else "Еда и деньги доступны"))]},{"action":"Купить дом","score":buy_score,"reason":"Достаточно собственных средств и есть продавец"},{"action":"Работа","score":work_score,"reason":"Обязательство 08:00–16:00"},{"action":"Перевозка","score":delivery_score,"reason":"Есть груз фермы; оплачивает таверна"},{"action":"Общение","score":social_score,"reason":"Свободный вечер и согласие второго участника"},{"action":"Свободное время","score":0,"reason":"Нет более важных доступных дел"}]
 	var best: Dictionary = a.choices[0]
 	a.choices.append({"action":"Пополнить запас еды","score":import_score,"reason":"Таверне нужна еда; есть продавец, деньги и маршрут через причал"})
 	for choice in a.choices:
@@ -273,7 +276,7 @@ func _finish(npc: Dictionary, a: Dictionary, action: Dictionary) -> void:
 			if stock!="" and int(state.stocks[stock])>0 and _pay(npc.account,"inn_business",_price("potato"),"meal:"+npc.id+":"+str(state.minute),npc.id,"Покупка еды"):
 				state.stocks[stock]-=1
 				state.consumed.potato=int(state.consumed.get("potato",0))+1
-				a.hunger=mini(1000,int(a.hunger)+650)
+				a.hunger=mini(1000,int(a.hunger)+_rule("mealGain",650))
 				_event("eat",npc.id,a.place,"Поел: расход 1 картофеля")
 		"buy":
 			var h: Dictionary = definition.house

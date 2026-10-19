@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import JSZip from "jszip";
+import NeedsPanel from "./NeedsPanel.vue";
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { Play, Pause, Save, Download, Upload, Plus } from "lucide-vue-next";
 import type { NPC } from "../../shared/schema";
@@ -1567,6 +1568,14 @@ onUnmounted(() => {
         ></template></div
     ></template>
     <template v-else>
+      <NeedsPanel
+        v-model="draft.needs"
+        v-model:selected="selectedAgent"
+        :actors="report?.definition.agents ?? []"
+        :running="!!report"
+        :active="report?.definition.needs"
+        :actor="inspect"
+      />
       <div class="panel world-run-controls">
         <div class="world-toolbar">
           <strong>{{

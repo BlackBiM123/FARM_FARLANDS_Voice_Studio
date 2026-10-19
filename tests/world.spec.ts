@@ -118,6 +118,52 @@ test("world editors and the real Godot Web core preserve lore and match headless
   await expect(page.getByText("Godot готов", { exact: true })).toBeVisible({
     timeout: 60000,
   });
+  await page.locator(".needs-panel summary").click();
+  const initialEnergy = page.getByRole("spinbutton", {
+    name: "Энергия",
+    exact: true,
+  });
+  await initialEnergy.fill("80");
+  await initialEnergy.press("Tab");
+  await page.getByRole("button", { name: /Сохранить мир/ }).click();
+  await page.reload();
+  await expect(page.getByText("Godot готов", { exact: true })).toBeVisible({
+    timeout: 60000,
+  });
+  await page.locator(".needs-panel summary").click();
+  await expect(initialEnergy).toHaveValue("80");
+  await page.getByRole("button", { name: "Новый запуск", exact: true }).click();
+  await expect(
+    page
+      .locator(".needs-levels")
+      .getByRole("meter", { name: "Энергия 80%", exact: true }),
+  ).toBeVisible();
+  await initialEnergy.fill("70");
+  await initialEnergy.press("Tab");
+  await expect(page.locator(".needs-pending")).toBeVisible();
+  await expect(
+    page
+      .locator(".needs-levels")
+      .getByRole("meter", { name: "Энергия 80%", exact: true }),
+  ).toBeVisible();
+  const needsDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Отчёт JSON", exact: true }).click();
+  const needsStream = await (await needsDownload).createReadStream(),
+    needsChunks: Buffer[] = [];
+  for await (const chunk of needsStream!) needsChunks.push(chunk);
+  const needsReport = JSON.parse(Buffer.concat(needsChunks).toString());
+  expect(needsReport.definition.needs.initialEnergy).toBe(800);
+  expect(
+    Object.values(needsReport.state.agents).every((a: any) => a.energy === 800),
+  ).toBe(true);
+  await page
+    .getByRole("button", {
+      name: "Вернуть базовые правила в черновик",
+      exact: true,
+    })
+    .click();
+  await page.getByRole("button", { name: /Сохранить мир/ }).click();
+  await page.locator(".needs-panel summary").click();
   await page.getByRole("button", { name: "Новый запуск", exact: true }).click();
   await expect(page.getByText("Баланс сходится", { exact: true })).toBeVisible({
     timeout: 30000,
@@ -242,7 +288,7 @@ test("world editors and the real Godot Web core preserve lore and match headless
   );
   await page.getByRole("button", { name: "7 дней", exact: true }).click();
   await page.waitForTimeout(300);
-  expect(await page.locator('.world-error').allTextContents()).toEqual([]);
+  expect(await page.locator(".world-error").allTextContents()).toEqual([]);
   await expect(page.locator(".world-run-controls strong").first()).toHaveText(
     "День 31 · 06:00",
   );

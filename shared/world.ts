@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { needsSchema } from "./needs.js";
 const id = z.string().regex(/^[a-z0-9_-]{1,60}$/),
   num = z.number().int().min(0).max(10000000),
   name = z.string().min(1).max(100);
@@ -84,6 +85,7 @@ export const worldSchema = z
       outputAmount: z.number().int().min(1).max(100),
       minutes: z.number().int().min(10).max(1440),
     }),
+    needs: needsSchema.optional(),
     protectedFacts: z.array(z.string().max(200)).max(100),
   })
   .superRefine((w, c) => {
